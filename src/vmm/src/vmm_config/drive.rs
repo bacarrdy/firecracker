@@ -57,6 +57,8 @@ pub struct BlockDeviceConfig {
     pub path_on_host: Option<String>,
     /// Rate Limiter for I/O operations.
     pub rate_limiter: Option<RateLimiterConfig>,
+    /// If true, aligned guest writes use host direct I/O while reads remain buffered.
+    pub direct_write: Option<bool>,
     /// The type of IO engine used by the device.
     // #[serde(default)]
     // #[serde(rename = "io_engine")]
@@ -215,6 +217,7 @@ mod tests {
 
                 path_on_host: self.path_on_host.clone(),
                 rate_limiter: self.rate_limiter,
+                direct_write: self.direct_write,
                 file_engine_type: self.file_engine_type,
 
                 socket: self.socket.clone(),
@@ -243,6 +246,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -278,6 +283,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -311,6 +318,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -341,6 +350,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_1),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -358,6 +369,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_2),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -386,6 +399,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_1),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -403,6 +418,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_2),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -420,6 +437,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_3),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -462,6 +481,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_1),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -479,6 +500,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_2),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -496,6 +519,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_3),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -539,6 +564,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_1.clone()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -556,6 +583,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_2.clone()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -629,6 +658,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_1),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -646,6 +677,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_path_2),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,
@@ -673,6 +706,8 @@ mod tests {
             discard: None,
             path_on_host: Some(dummy_file.as_path().to_str().unwrap().to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: Some(FileEngineType::Sync),
 
             socket: None,
@@ -704,6 +739,8 @@ mod tests {
             discard: None,
             path_on_host: Some(backing_file.as_path().to_str().unwrap().to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: None,

@@ -436,6 +436,7 @@ fn test_preboot_load_snap_disallowed_after_boot_resources() {
         discard: None,
         path_on_host: Some(tmp_file),
         rate_limiter: None,
+        direct_write: None,
         file_engine_type: None,
 
         socket: None,

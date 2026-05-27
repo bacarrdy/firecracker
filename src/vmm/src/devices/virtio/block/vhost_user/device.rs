@@ -73,6 +73,7 @@ impl TryFrom<&BlockDeviceConfig> for VhostUserBlockConfig {
             &value.discard,
             &value.path_on_host,
             &value.rate_limiter,
+            &value.direct_write,
             &value.file_engine_type,
         ) {
             Ok(Self {
@@ -101,6 +102,7 @@ impl From<VhostUserBlockConfig> for BlockDeviceConfig {
             discard: None,
             path_on_host: None,
             rate_limiter: None,
+            direct_write: None,
             file_engine_type: None,
 
             socket: Some(value.socket),
@@ -414,6 +416,8 @@ mod tests {
             discard: None,
             path_on_host: None,
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
 
             socket: Some("sock".to_string()),
@@ -430,6 +434,8 @@ mod tests {
             discard: None,
             path_on_host: Some("path".to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: Some(FileEngineType::Sync),
 
             socket: None,
@@ -446,6 +452,8 @@ mod tests {
             discard: None,
             path_on_host: Some("path".to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: Some(FileEngineType::Sync),
 
             socket: Some("sock".to_string()),

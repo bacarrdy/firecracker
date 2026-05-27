@@ -11,7 +11,9 @@ use std::os::unix::io::AsRawFd;
 use vm_memory::GuestMemoryError;
 use vmm_sys_util::eventfd::EventFd;
 
-use crate::devices::virtio::block::virtio::io::RequestError;
+use crate::devices::virtio::block::virtio::io::{
+    DIRECT_WRITE_FD, RequestError, direct_io_eligible,
+};
 use crate::devices::virtio::block::virtio::{IO_URING_NUM_ENTRIES, PendingRequest};
 use crate::io_uring::operation::{Cqe, OpCode, Operation};
 use crate::io_uring::restriction::Restriction;
@@ -42,6 +44,7 @@ pub enum AsyncIoError {
 #[derive(Debug)]
 pub struct AsyncFileEngine {
     file: File,
+    direct_file: Option<File>,
     ring: IoUring<WrappedRequest>,
     completion_evt: EventFd,
     discard_op: Option<AsyncDiscardOp>,
@@ -88,9 +91,15 @@ impl AsyncFileEngine {
 
     fn new_ring(
         file: &File,
+        direct_file: Option<&File>,
         completion_fd: RawFd,
         discard_op: Option<AsyncDiscardOp>,
     ) -> Result<IoUring<WrappedRequest>, IoUringError> {
+        let mut files = vec![file];
+        if let Some(direct_file) = direct_file {
+            files.push(direct_file);
+        }
+
         let mut restrictions = vec![
             // Make sure we only allow operations on pre-registered fds.
             Restriction::RequireFixedFds,
@@ -114,37 +123,57 @@ impl AsyncFileEngine {
 
         IoUring::new_with_required_ops(
             u32::from(IO_URING_NUM_ENTRIES),
-            vec![file],
+            files,
             restrictions,
             Some(completion_fd),
             &required_ops,
         )
     }
 
-    pub fn from_file(file: File, discard: bool) -> Result<AsyncFileEngine, AsyncIoError> {
+    pub fn from_file(
+        file: File,
+        direct_file: Option<File>,
+        discard: bool,
+    ) -> Result<AsyncFileEngine, AsyncIoError> {
         log_dev_preview_warning("Async file IO", Option::None);
 
         let completion_evt = EventFd::new(libc::EFD_NONBLOCK).map_err(AsyncIoError::EventFd)?;
         let discard_op = Self::discard_op(&file, discard)?;
-        let ring = Self::new_ring(&file, completion_evt.as_raw_fd(), discard_op)
+        let ring = Self::new_ring(
+            &file,
+            direct_file.as_ref(),
+            completion_evt.as_raw_fd(),
+            discard_op,
+        )
             .map_err(AsyncIoError::IoUring)?;
 
         Ok(AsyncFileEngine {
             file,
+            direct_file,
             ring,
             completion_evt,
             discard_op,
         })
     }
 
-    pub fn update_file(&mut self, file: File) -> Result<(), AsyncIoError> {
+    pub fn update_file(
+        &mut self,
+        file: File,
+        direct_file: Option<File>,
+    ) -> Result<(), AsyncIoError> {
         let discard_op = Self::discard_op(&file, self.discard_op.is_some())?;
-        let ring = Self::new_ring(&file, self.completion_evt.as_raw_fd(), discard_op)
+        let ring = Self::new_ring(
+            &file,
+            direct_file.as_ref(),
+            self.completion_evt.as_raw_fd(),
+            discard_op,
+        )
             .map_err(AsyncIoError::IoUring)?;
 
         self.ring = ring;
         self.file = file;
         self.discard_op = discard_op;
+        self.direct_file = direct_file;
         Ok(())
     }
 
@@ -215,6 +244,11 @@ impl AsyncFileEngine {
         &self.file
     }
 
+    #[cfg(test)]
+    pub fn direct_file(&self) -> Option<&File> {
+        self.direct_file.as_ref()
+    }
+
     pub fn completion_evt(&self) -> &EventFd {
         &self.completion_evt
     }
@@ -273,9 +307,15 @@ impl AsyncFileEngine {
 
         let wrapped_user_data = WrappedRequest::new(req);
 
+        let fd = if self.direct_file.is_some() && direct_io_eligible(buf as usize, offset, count) {
+            DIRECT_WRITE_FD
+        } else {
+            0
+        };
+
         self.ring
             .push(Operation::write(
-                0,
+                fd,
                 buf as usize,
                 count,
                 offset,
@@ -420,7 +460,7 @@ mod tests {
     #[test]
     fn test_discard_regular_file_uses_fallocate() {
         let file = TempFile::new().unwrap().into_file();
-        let engine = AsyncFileEngine::from_file(file, true).unwrap();
+        let engine = AsyncFileEngine::from_file(file, None, true).unwrap();
 
         assert_eq!(engine.discard_op, Some(AsyncDiscardOp::Fallocate));
     }
