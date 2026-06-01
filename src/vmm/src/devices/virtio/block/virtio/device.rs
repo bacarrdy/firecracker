@@ -303,7 +303,7 @@ impl From<VirtioBlockConfig> for BlockDeviceConfig {
             discard: Some(value.discard),
             path_on_host: Some(value.path_on_host),
             rate_limiter: value.rate_limiter,
-            direct_write: Some(value.direct_write),
+            direct_write: value.direct_write.then_some(true),
             file_engine_type: Some(value.file_engine_type),
 
             socket: None,
