@@ -3,6 +3,7 @@
 
 #![doc(hidden)]
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(test)]
 use std::thread;
 #[cfg(test)]
@@ -26,6 +27,8 @@ use crate::rate_limiter::RateLimiter;
 use crate::vmm_config::{RateLimiterConfig, TokenBucketConfig};
 use crate::vstate::memory::{Bytes, GuestAddress};
 
+static NEXT_BLOCK_ID: AtomicUsize = AtomicUsize::new(0);
+
 /// Create a default Block instance to be used in tests.
 pub fn default_block(file_engine_type: FileEngineType) -> VirtioBlock {
     // Create backing file.
@@ -37,8 +40,9 @@ pub fn default_block(file_engine_type: FileEngineType) -> VirtioBlock {
 
 /// Create a default Block instance using file at the specified path to be used in tests.
 pub fn default_block_with_path(path: String, file_engine_type: FileEngineType) -> VirtioBlock {
+    let drive_id = format!("test-{}", NEXT_BLOCK_ID.fetch_add(1, Ordering::Relaxed));
     let config = VirtioBlockConfig {
-        drive_id: "test".to_string(),
+        drive_id,
         path_on_host: path,
         is_root_device: false,
         partuuid: None,

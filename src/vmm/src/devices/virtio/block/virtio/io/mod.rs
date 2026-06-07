@@ -75,7 +75,8 @@ impl FileEngine {
     ) -> Result<FileEngine, BlockIoError> {
         match engine_type {
             FileEngineType::Async => Ok(FileEngine::Async(
-                AsyncFileEngine::from_file(file, direct_file, discard).map_err(BlockIoError::Async)?,
+                AsyncFileEngine::from_file(file, direct_file, discard)
+                    .map_err(BlockIoError::Async)?,
             )),
             FileEngineType::Sync => Ok(FileEngine::Sync(SyncFileEngine::from_file(
                 file,

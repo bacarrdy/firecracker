@@ -134,7 +134,7 @@ impl DiskProperties {
                 file_engine_type,
                 discard,
             )
-                .map_err(VirtioBlockError::FileEngine)?,
+            .map_err(VirtioBlockError::FileEngine)?,
             nsectors: disk_size >> SECTOR_SHIFT,
             image_id,
             direct_write,
@@ -935,6 +935,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Sync,
         };
 
@@ -953,6 +954,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Async,
         };
         let block = VirtioBlock::new(async_config).unwrap();
@@ -976,6 +978,7 @@ mod tests {
                 discard: true,
                 cache_type: CacheType::Unsafe,
                 rate_limiter: None,
+                direct_write: false,
                 file_engine_type: engine,
             };
             let mut block = VirtioBlock::new(config).unwrap();

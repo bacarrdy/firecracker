@@ -145,7 +145,7 @@ impl AsyncFileEngine {
             completion_evt.as_raw_fd(),
             discard_op,
         )
-            .map_err(AsyncIoError::IoUring)?;
+        .map_err(AsyncIoError::IoUring)?;
 
         Ok(AsyncFileEngine {
             file,
@@ -168,7 +168,7 @@ impl AsyncFileEngine {
             self.completion_evt.as_raw_fd(),
             discard_op,
         )
-            .map_err(AsyncIoError::IoUring)?;
+        .map_err(AsyncIoError::IoUring)?;
 
         self.ring = ring;
         self.file = file;

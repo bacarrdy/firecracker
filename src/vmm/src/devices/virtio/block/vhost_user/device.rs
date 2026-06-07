@@ -67,7 +67,7 @@ impl TryFrom<&BlockDeviceConfig> for VhostUserBlockConfig {
     type Error = VhostUserBlockError;
 
     fn try_from(value: &BlockDeviceConfig) -> Result<Self, Self::Error> {
-        if let (Some(socket), None, None, None, None, None) = (
+        if let (Some(socket), None, None, None, None, None, None) = (
             &value.socket,
             &value.is_read_only,
             &value.discard,
