@@ -20,6 +20,9 @@ and this project adheres to
 - [#5910](https://github.com/firecracker-microvm/firecracker/pull/5910): Add
   optional `direct_write` support for virtio-block devices. When enabled,
   aligned guest writes use host direct I/O while reads remain buffered.
+- [#5938](https://github.com/firecracker-microvm/firecracker/pull/5938): Add
+  `ksm_mergeable` to `/machine-config` to let operators explicitly mark
+  anonymous guest memory as mergeable with Linux Kernel Samepage Merging.
 
 ### Changed
 
