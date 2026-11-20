@@ -1418,3 +1418,132 @@ fn deferred_write_preserves_burst_and_debt_until_accepted() {
     assert_eq!(block.rate_limiter.ops().unwrap().one_time_burst(), 0);
     assert_eq!(block.rate_limiter.ops().unwrap().budget(), 100);
 }
+
+/// A misaligned 2 MiB read served in bounce chunks whose second chunk fails
+/// (the backing shrank after the drive opened it). The device has put the first chunk's guest
+/// bytes into guest memory; the used length must say so (virtio: the bytes written into the
+/// device-writable part, here the data prefix plus the status byte).
+#[test]
+fn test_bounce_read_used_len_matches_guest_memory() {
+    for et in [FileEngineType::Async, FileEngineType::Sync] {
+        let mem = single_region_mem(0x4000000);
+        let mut g = Guest::new(&mem);
+        let f = backing(4 << 20, 0x11);
+        let path = f.as_path().to_str().unwrap().to_string();
+        let mut block = make_block(&path, et, false, &mem, &g.vq);
+        f.as_file().set_len(1 << 20).unwrap();
+        let addr = Guest::data_addr(0, 0x200);
+        mem.write_slice(&vec![0xee; 2 << 20], GuestAddress(addr))
+            .unwrap();
+        g.submit(0, Kind::Read, 512, 2 << 20, addr);
+        g.kick(&mut block);
+        let used = wait_used(&mut block, &mut g, 1);
+        assert_eq!(u32::from(g.status(0)), VIRTIO_BLK_S_IOERR, "{et:?}");
+        let mut got = vec![0u8; 2 << 20];
+        mem.read_slice(&mut got, GuestAddress(addr)).unwrap();
+        let copied = got.iter().position(|&b| b != 0x11).unwrap_or(got.len());
+        assert!(got[copied..].iter().all(|&b| b == 0xee), "{et:?}");
+        println!(
+            "read {et:?}: guest bytes written {copied}, used len {}",
+            used[0].1
+        );
+        assert_eq!(
+            used[0].1 as usize,
+            copied + 1,
+            "{et:?}: the used length does not match what the device wrote to guest memory"
+        );
+    }
+}
+
+/// A misaligned 2 MiB write whose second chunk fails (RLIMIT_FSIZE at 1 MiB):
+/// the guest's first 1 MiB - 512 bytes are on the backing; the write byte counter must count
+/// the confirmed prefix.
+#[test]
+fn test_bounce_write_counts_landed_bytes() {
+    for et in [FileEngineType::Async, FileEngineType::Sync] {
+        let mem = single_region_mem(0x4000000);
+        let mut g = Guest::new(&mem);
+        let f = backing(4 << 20, 0x11);
+        let path = f.as_path().to_str().unwrap().to_string();
+        let mut block = make_block(&path, et, false, &mem, &g.vq);
+        let addr = Guest::data_addr(0, 0);
+        mem.write_slice(&vec![0x7c; 2 << 20], GuestAddress(addr))
+            .unwrap();
+        let used = {
+            let _lim = FsizeLimit::set(1 << 20);
+            g.submit(0, Kind::Write, 512, 2 << 20, addr);
+            g.kick(&mut block);
+            wait_used(&mut block, &mut g, 1)
+        };
+        assert_eq!(u32::from(g.status(0)), VIRTIO_BLK_S_IOERR, "{et:?}");
+        let disk = file_bytes(&path, 512, 2 << 20);
+        let landed = disk.iter().position(|&b| b != 0x7c).unwrap_or(disk.len());
+        println!(
+            "write {et:?}: guest bytes on the backing {landed}, write_bytes {}, used len {}",
+            block.metrics.write_bytes.count(),
+            used[0].1
+        );
+        assert_eq!(used[0].1, 1, "{et:?}: a write reports only its status byte");
+        assert_eq!(
+            block.metrics.write_bytes.count(),
+            landed as u64,
+            "{et:?}: write_bytes does not count the bytes that landed"
+        );
+    }
+}
+
+/// With a one-second bandwidth bucket and no one-time burst, a 256 KiB write deferred behind
+/// a read-modify-write must not leave the limiter blocked by a debt it never incurred. Once the
+/// RMW completed it is accepted at once (and then incurs its debt once).
+#[test]
+fn test_deferred_oversized_write_not_delayed_by_phantom_debt() {
+    let mem = single_region_mem(0x4000000);
+    let mut g = Guest::new(&mem);
+    let f = backing(4 << 20, 0x11);
+    let path = f.as_path().to_str().unwrap().to_string();
+    let mut block = make_block(&path, FileEngineType::Async, false, &mem, &g.vq);
+    block.rate_limiter = RateLimiter::new(65536, 0, 1000, 0, 0, 0);
+    mem.write_slice(&[0x51; 512], GuestAddress(Guest::data_addr(0, 0)))
+        .unwrap();
+    mem.write_slice(&vec![0x52; 256 << 10], GuestAddress(Guest::data_addr(1, 0)))
+        .unwrap();
+    g.submit(0, Kind::Write, 4096 + 512, 512, Guest::data_addr(0, 0));
+    g.submit(1, Kind::Write, 0, 256 << 10, Guest::data_addr(1, 0));
+    let t0 = Instant::now();
+    g.kick(&mut block);
+    assert!(block.bounce_hold.is_some(), "the write waits for the RMW");
+    let blocked_while_held = block.rate_limiter.is_blocked();
+    let used = wait_used(&mut block, &mut g, 2);
+    let took = t0.elapsed();
+    once_each(&used, 2);
+    ok(&g, &[0, 1]);
+    println!(
+        "debt: limiter blocked while the write was held {blocked_while_held}, both done in {took:?}"
+    );
+    assert!(!blocked_while_held, "a held write armed a debt timer");
+    assert!(
+        took < Duration::from_millis(1500),
+        "both requests took {took:?}"
+    );
+    assert_eq!(file_bytes(&path, 0, 256 << 10), vec![0x52; 256 << 10]);
+}
+
+/// A deferred request must preserve the available one-time burst.
+#[test]
+fn test_deferred_write_keeps_the_one_time_burst() {
+    let mem = single_region_mem(0x4000000);
+    let mut g = Guest::new(&mem);
+    let f = backing(4 << 20, 0x11);
+    let path = f.as_path().to_str().unwrap().to_string();
+    let mut block = make_block(&path, FileEngineType::Async, false, &mem, &g.vq);
+    block.rate_limiter = RateLimiter::new(0, 0, 0, 100, 2, 60_000);
+    g.submit(0, Kind::Write, 4096 + 512, 512, Guest::data_addr(0, 0));
+    g.submit(1, Kind::Write, 4096, 4096, Guest::data_addr(1, 0));
+    g.kick(&mut block);
+    assert!(block.bounce_hold.is_some(), "the write waits for the RMW");
+    let burst = block.rate_limiter.ops().unwrap().one_time_burst();
+    println!("burst: ops one-time burst left after the deferral {burst} (want 1)");
+    let used = wait_used(&mut block, &mut g, 2);
+    once_each(&used, 2);
+    assert_eq!(burst, 1, "the deferral consumed the one-time burst");
+}
