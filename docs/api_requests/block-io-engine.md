@@ -81,6 +81,13 @@ runs of that downstream build (32 runs per profile, per engine and per
 512-byte or 4096-byte backing sector size). These measurements predate this
 standalone reference branch.
 
+The x86_64 reference passed all 100 block tests, including 18 event-driven
+cases. A local KVM guest running against the release binary with the default
+seccomp filter wrote 1024 bytes across a 4 KiB boundary on an 8 MiB regular
+file, then read back one sector and both surrounding blocks. Guest verification
+and the host checksum of the entire file matched for both `Sync` and `Async`.
+Each engine reported one direct read-modify-write and one bounced read.
+
 To exercise the block unit tests, including the real `O_DIRECT` descriptor
 round trip, run the following on Linux with io_uring enabled and a temporary
 filesystem that supports direct I/O:
