@@ -75,6 +75,10 @@
                 "comment": "Used on drive patch"
             },
             {
+                "syscall": "uname",
+                "comment": "Used by the Async block engine to check the host kernel for io_uring block discard when a discard drive is created or patched after boot"
+            },
+            {
                 "syscall": "brk",
                 "comment": "Called for expanding the heap"
             },
