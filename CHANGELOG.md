@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Reference branch on v1.17.0
+
+- Writable virtio-block drives can opt into host direct I/O for guest reads
+  and writes using `direct_write`. The branch includes asynchronous discard
+  support and handles overlapping partial-block writes and discards.
+  See the [block I/O engine documentation](docs/api_requests/block-io-engine.md).
+
 ## [1.17.0]
 
 ### Added

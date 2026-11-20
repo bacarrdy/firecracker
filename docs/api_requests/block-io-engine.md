@@ -47,23 +47,25 @@ curl --unix-socket ${socket} -i \
          }"
 ```
 
-## Direct write mode
+## Direct I/O for writable drives
 
-The optional `direct_write` field enables direct I/O for guest write requests
-only when they satisfy direct I/O alignment requirements, while keeping reads on
-the regular buffered file descriptor. The guest write offset and length must be
-multiples of 4096 bytes (4 KiB), and the guest memory buffer address must also
-be suitably aligned for direct I/O. Writes that do not meet these requirements
-automatically fall back to the buffered path.
+This reference branch keeps the existing `direct_write` configuration name.
+Setting it to `true` on a writable virtio-block drive routes both guest reads
+and writes through the host `O_DIRECT` descriptor when the backing supports
+the mode. This prevents a buffered guest read from seeing an old cached page
+after an asynchronous direct write. The default is `false`.
 
-This mode can reduce host page-cache overhead for write-heavy block devices
-whose backing storage performs better with direct writes. It is disabled by
-default to preserve existing behavior.
+Aligned requests use the guest buffer directly. Other requests use one reusable
+aligned buffer per drive, normally 1 MiB. Partial-block writes preserve
+neighbouring bytes with a read-modify-write. The asynchronous engine serializes
+overlapping writes and discards with that operation. Both engines process
+larger bounced requests in chunks.
 
-Direct I/O support and alignment requirements are filesystem and kernel
-dependent. Validate this mode with the target backing storage before enabling it
-for production workloads, especially when the backing file is also accessed by
-host tooling through buffered I/O.
+Block devices use their reported logical block size when available. Regular
+files use a 4096-byte alignment. A regular file with a size that is not a
+multiple of 4096 uses buffered I/O for the entire drive and emits a warning.
+Failure to open the requested direct descriptor is reported to the API caller.
+Read-only drives continue to use their ordinary descriptor.
 
 ## Host requirements
 

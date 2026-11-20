@@ -15,6 +15,7 @@ use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use block_io::FileEngine;
 use serde::{Deserialize, Serialize};
@@ -166,13 +167,15 @@ impl DiskProperties {
         let mut disk_image = Self::open_file(&disk_image_path, is_disk_read_only)?;
         let direct_disk_image =
             Self::open_direct_file(&disk_image_path, is_disk_read_only, direct_write)?;
-        let direct_write = direct_disk_image.is_some();
+        // The requested mode (kept in the snapshot, applied again at PATCH); the engine may
+        // still run without the direct descriptor (`warn_direct_off`).
+        let direct_write = direct_write && !is_disk_read_only;
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
         let discard_sector_alignment =
             Self::discard_sector_alignment(&disk_image_path, &disk_image)?;
         let image_id = Self::build_disk_image_id(&disk_image);
 
-        Ok(Self {
+        let disk = Self {
             file_path: disk_image_path,
             file_engine: FileEngine::from_file(
                 disk_image,
@@ -185,7 +188,24 @@ impl DiskProperties {
             image_id,
             direct_write,
             discard_sector_alignment,
-        })
+        };
+        disk.warn_direct_off(disk_size);
+        Ok(disk)
+    }
+
+    /// A drive with `direct_write` whose backing direct I/O cannot serve exactly (a regular
+    /// file whose size is not a multiple of 4096) runs as `direct_write: false`: say so.
+    fn warn_direct_off(&self, disk_size: u64) {
+        if self.direct_write && self.file_engine.dio().is_none() {
+            warn!(
+                "Drive {}: direct I/O is off: O_DIRECT cannot serve this backing exactly (a \
+                 regular file of {} bytes, not a multiple of {}); the drive uses one buffered \
+                 descriptor",
+                self.file_path,
+                disk_size,
+                block_io::direct::FILE_ALIGN
+            );
+        }
     }
 
     /// Update the path to the file backing the block device
@@ -208,6 +228,7 @@ impl DiskProperties {
         self.nsectors = disk_size >> SECTOR_SHIFT;
         self.discard_sector_alignment = discard_sector_alignment;
         self.file_path = disk_image_path;
+        self.warn_direct_off(disk_size);
 
         Ok(())
     }
@@ -402,7 +423,7 @@ pub struct VirtioBlockConfig {
     pub path_on_host: String,
     /// Rate Limiter for I/O operations.
     pub rate_limiter: Option<RateLimiterConfig>,
-    /// If true, aligned guest writes use host direct I/O while reads remain buffered.
+    /// If true, the drive does all its reads and writes with host direct I/O (`io::direct`).
     #[serde(default)]
     pub direct_write: bool,
     /// The type of IO engine used by the device.
@@ -488,8 +509,25 @@ pub struct VirtioBlock {
     pub disk: DiskProperties,
     pub rate_limiter: RateLimiter,
     pub is_io_engine_throttled: bool,
+    /// Direct I/O: set while the queue must not be processed (see `BounceHold`).
+    pub bounce_hold: Option<BounceHold>,
     pub metrics: Arc<BlockDeviceMetrics>,
 }
+
+/// Direct I/O (`io::direct`): the request at the head of the queue waits (`wait`) for the
+/// bounce path, since `since`; the queue is not processed until `FileEngine::can_proceed`.
+/// The device does not wait for that: the completions of the requests in flight resume the
+/// queue (`process_async_completion_event`).
+#[derive(Debug, Clone, Copy)]
+pub struct BounceHold {
+    wait: block_io::direct::Wait,
+    since: Instant,
+}
+
+/// A request that waited at the head of the queue, or a bounce that took, longer than this is
+/// logged (at most about one line a second per drive and kind: bounces of a drive do not
+/// overlap, and one held request waits at a time).
+const SLOW_BOUNCE: Duration = Duration::from_secs(1);
 
 macro_rules! unwrap_async_file_engine_or_return {
     ($file_engine: expr) => {
@@ -594,6 +632,7 @@ impl VirtioBlock {
             disk: disk_properties,
             rate_limiter,
             is_io_engine_throttled: false,
+            bounce_hold: None,
             metrics: BlockMetricsPerDevice::alloc(config.drive_id),
         })
     }
@@ -654,6 +693,17 @@ impl VirtioBlock {
         // This is safe since we checked in the event handler that the device is activated.
         let active_state = self.device_state.active_state().unwrap();
 
+        // Direct I/O: a held queue is not processed until its head can go.
+        let mut deferred_since = None;
+        if let Some(hold) = self.bounce_hold {
+            if !self.disk.file_engine.can_proceed(hold.wait) {
+                self.kick_submission_queue();
+                return Ok(());
+            }
+            self.bounce_hold = None;
+            deferred_since = Some(hold.since);
+        }
+
         let queue = &mut self.queues[queue_index];
         let mut used_any = false;
 
@@ -662,21 +712,30 @@ impl VirtioBlock {
             let processing_result =
                 match Request::parse(&head, &active_state.mem, self.disk.nsectors) {
                     Ok(request) => {
-                        if request.rate_limit(&mut self.rate_limiter) {
+                        let charge = request.rate_limit_charge();
+                        let Some(reservation) = charge.take(&mut self.rate_limiter) else {
                             // Stop processing the queue and return this descriptor chain to the
                             // avail ring, for later processing.
                             queue.undo_pop();
                             self.metrics.rate_limiter_throttled_events.inc();
                             break;
-                        }
+                        };
 
-                        request.process(
+                        let res = request.process(
                             &mut self.disk,
                             head.index,
                             &active_state.mem,
                             &self.metrics,
                             self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
-                        )
+                        );
+                        if matches!(
+                            res,
+                            ProcessingResult::Deferred(_) | ProcessingResult::Throttled
+                        ) {
+                            // It goes back to the queue and is charged again when processed.
+                            reservation.cancel();
+                        }
+                        res
                     }
                     Err(err) => {
                         error!("Failed to parse available descriptor chain: {:?}", err);
@@ -688,8 +747,34 @@ impl VirtioBlock {
                     }
                 };
 
+            // The request that waited at the head of the queue went ahead.
+            if let ProcessingResult::Submitted | ProcessingResult::Executed(_) = processing_result
+                && let Some(since) = deferred_since.take()
+                && since.elapsed() > SLOW_BOUNCE
+            {
+                warn!(
+                    "Drive {}: a request waited {} ms at the head of the queue for the direct \
+                     I/O bounce path",
+                    self.id,
+                    since.elapsed().as_millis()
+                );
+            }
+
             match processing_result {
                 ProcessingResult::Submitted => {}
+                ProcessingResult::Deferred(wait) => {
+                    // Back to the head of the queue; the completions of the requests in flight
+                    // resume the queue (process_async_completion_event).
+                    queue.undo_pop();
+                    if deferred_since.is_none() {
+                        self.metrics.direct_bounce_deferred.inc();
+                    }
+                    self.bounce_hold = Some(BounceHold {
+                        wait,
+                        since: deferred_since.take().unwrap_or_else(Instant::now),
+                    });
+                    break;
+                }
                 ProcessingResult::Throttled => {
                     queue.undo_pop();
                     self.is_io_engine_throttled = true;
@@ -719,17 +804,27 @@ impl VirtioBlock {
                 });
         }
 
-        if let FileEngine::Async(ref mut engine) = self.disk.file_engine
-            && let Err(err) = engine.kick_submission_queue()
-        {
-            error!("BlockError submitting pending block requests: {:?}", err);
-        }
+        self.kick_submission_queue();
 
         if !used_any {
             self.metrics.no_avail_buffer.inc();
         }
 
         Ok(())
+    }
+
+    fn kick_submission_queue(&mut self) {
+        if let FileEngine::Async(ref mut engine) = self.disk.file_engine
+            && let Err(err) = engine.kick_submission_queue()
+        {
+            // Not left to the guest's next notification: handled as a full ring, so the next
+            // completion event submits again, and that event is signalled now.
+            if !self.is_io_engine_throttled {
+                error!("BlockError submitting pending block requests: {:?}", err);
+            }
+            self.is_io_engine_throttled = true;
+            engine.signal_completion_event();
+        }
     }
 
     fn process_async_completion_queue(&mut self) {
@@ -746,20 +841,31 @@ impl VirtioBlock {
                     break;
                 }
                 Ok(None) => break,
-                Ok(Some(cqe)) => {
-                    let res = cqe.result();
-                    let user_data = cqe.user_data();
-
-                    let (pending, res) = match res {
-                        Ok(count) => (user_data, Ok(count)),
-                        Err(error) => (
-                            user_data,
-                            Err(IoErr::FileEngine(block_io::BlockIoError::Async(
-                                async_io::AsyncIoError::IO(error),
-                            ))),
-                        ),
-                    };
-                    let finished = pending.finish(&active_state.mem, res, &self.metrics);
+                Ok(Some(done)) => {
+                    if let Some((kind, took)) = done.bounce {
+                        if done.result.is_ok() {
+                            count_bounce(&self.metrics, kind);
+                        }
+                        if took > SLOW_BOUNCE {
+                            warn!(
+                                "Drive {}: a direct I/O bounce ({:?}) took {} ms",
+                                self.id,
+                                kind,
+                                took.as_millis()
+                            );
+                        }
+                    }
+                    let res = done.result.map_err(|error| {
+                        IoErr::FileEngine(block_io::BlockIoError::Async(
+                            async_io::AsyncIoError::IO(error),
+                        ))
+                    });
+                    let finished = done.req.finish_with_progress(
+                        &active_state.mem,
+                        res,
+                        done.progress,
+                        &self.metrics,
+                    );
                     queue
                         .add_used(finished.desc_idx, finished.num_bytes_to_mem)
                         .unwrap_or_else(|err| {
@@ -791,15 +897,42 @@ impl VirtioBlock {
         } else {
             self.process_async_completion_queue();
 
-            if self.is_io_engine_throttled {
+            // Resume a queue stopped by a full io_uring, or held for the bounce path (whether
+            // the hold is released is decided in process_queue).
+            if self.is_io_engine_throttled || self.bounce_hold.is_some() {
                 self.is_io_engine_throttled = false;
                 self.process_queue(0).unwrap()
             }
         }
     }
 
+    /// `Async`: complete every request in flight, a direct I/O bounce in progress to its end
+    /// included (the completion of each of its transfers queues the next one, so one drain does
+    /// not complete it). Waits for the device.
+    fn complete_in_flight(&mut self) {
+        if !matches!(self.disk.file_engine, FileEngine::Async(_)) {
+            return;
+        }
+        loop {
+            if let Err(err) = self.disk.file_engine.drain(false) {
+                error!("Failed to drain the block device's requests: {:?}", err);
+                return;
+            }
+            self.process_async_completion_queue();
+            if !self.disk.file_engine.bounce_in_progress() {
+                return;
+            }
+        }
+    }
+
     /// Update the backing file and the config space of the block device.
     pub fn update_disk_image(&mut self, disk_image_path: String) -> Result<(), VirtioBlockError> {
+        // Every request accepted on the current backing completes on it before the swap: the
+        // replaced io_uring would drop the ones in flight (their completions never reach the
+        // guest, whose I/O then hangs), and a bounce in progress transfers through it.
+        if self.is_activated() {
+            self.complete_in_flight();
+        }
         self.disk.update(disk_image_path, self.read_only)?;
         self.config_space.capacity = self.disk.nsectors.to_le(); // virtio_block_config_space();
 
@@ -808,6 +941,12 @@ impl VirtioBlock {
             self.interrupt_trigger()
                 .trigger(VirtioInterruptType::Config)
                 .unwrap();
+            // A request held for the bounce path, or stopped by a full ring, resumes on the new
+            // backing.
+            if self.bounce_hold.is_some() || self.is_io_engine_throttled {
+                self.is_io_engine_throttled = false;
+                self.process_queue(0).unwrap();
+            }
         }
 
         self.metrics.update_count.inc();
@@ -839,6 +978,8 @@ impl VirtioBlock {
             return;
         }
 
+        // Nothing may be in flight in the saved state, a bounce's later transfers included.
+        self.complete_in_flight();
         self.drain_and_flush(false);
         if let FileEngine::Async(ref _engine) = self.disk.file_engine {
             self.process_async_completion_queue();
@@ -939,6 +1080,7 @@ impl VirtioDevice for VirtioBlock {
             return false;
         }
         self.is_io_engine_throttled = false;
+        self.bounce_hold = None;
         true
     }
 }
@@ -979,6 +1121,7 @@ mod tests {
     use crate::devices::virtio::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
     use crate::devices::virtio::test_utils::{VirtQueue, default_interrupt, default_mem};
     use crate::rate_limiter::TokenType;
+    use crate::test_utils::single_region_mem;
     use crate::vstate::memory::{Address, Bytes, GuestAddress};
 
     #[test]
@@ -2356,5 +2499,412 @@ mod tests {
             );
             assert_eq!(block.disk.image_id, id.as_slice());
         }
+    }
+
+    // ---- Direct I/O bounce path: the queue is held, never the VMM thread ----
+
+    /// An activated Async drive with `direct_write` on a 64 KiB file (filled with 0x11), a
+    /// 16-entry queue at guest address 0.
+    fn direct_block(mem: &GuestMemoryMmap, vq: &VirtQueue) -> (VirtioBlock, TempFile) {
+        let f = TempFile::new().unwrap();
+        f.as_file().write_all(&[0x11; 0x10000]).unwrap();
+        let config = VirtioBlockConfig {
+            drive_id: "dio".to_string(),
+            path_on_host: f.as_path().to_str().unwrap().to_string(),
+            is_root_device: false,
+            partuuid: None,
+            is_read_only: false,
+            discard: false,
+            cache_type: CacheType::Unsafe,
+            rate_limiter: None,
+            direct_write: true,
+            file_engine_type: FileEngineType::Async,
+            blk_size: None,
+            topology: None,
+        };
+        let mut block = VirtioBlock::new(config).unwrap();
+        assert!(block.disk.file_engine.dio().is_some());
+        block.queues[0] = vq.create_queue();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        (block, f)
+    }
+
+    const DIO_HDR: u64 = 0x8000;
+    const DIO_STATUS: u64 = 0x9000;
+
+    /// Request `i` (descriptors 3i..3i+2) in avail slot `i`: `len` bytes at `offset` from/to
+    /// guest `data`; its status byte starts as 0xff.
+    fn put_req(vq: &VirtQueue, i: u16, write: bool, offset: u64, data: u64, len: u32) {
+        let mem = vq.memory();
+        let hdr = GuestAddress(DIO_HDR + 0x20 * u64::from(i));
+        let status = GuestAddress(DIO_STATUS + 0x10 * u64::from(i));
+        let t = if write {
+            VIRTIO_BLK_T_OUT
+        } else {
+            VIRTIO_BLK_T_IN
+        };
+        mem.write_obj(RequestHeader::new(t, offset >> SECTOR_SHIFT), hdr)
+            .unwrap();
+        mem.write_obj(0xffu8, status).unwrap();
+        let d = 3 * i;
+        let data_flags = if write {
+            VIRTQ_DESC_F_NEXT
+        } else {
+            VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE
+        };
+        vq.dtable[d as usize].set(hdr.0, 16, VIRTQ_DESC_F_NEXT, d + 1);
+        vq.dtable[d as usize + 1].set(data, len, data_flags, d + 2);
+        vq.dtable[d as usize + 2].set(status.0, 1, VIRTQ_DESC_F_WRITE, 0);
+        vq.avail.ring[i as usize].set(d);
+    }
+
+    fn req_status(mem: &GuestMemoryMmap, i: u16) -> u8 {
+        mem.read_obj(GuestAddress(DIO_STATUS + 0x10 * u64::from(i)))
+            .unwrap()
+    }
+
+    /// Wait for the device and handle completion events until `n` requests are used.
+    fn complete_until(block: &mut VirtioBlock, vq: &VirtQueue, n: u16) {
+        for _ in 0..100 {
+            if vq.used.idx.get() >= n {
+                return;
+            }
+            if let FileEngine::Async(ref mut engine) = block.disk.file_engine {
+                engine.drain(false).unwrap();
+            }
+            thread::sleep(Duration::from_millis(10));
+            block.process_async_completion_event();
+        }
+        panic!("used {} of {} requests", vq.used.idx.get(), n);
+    }
+
+    fn file_bytes(f: &TempFile, offset: u64, len: usize) -> Vec<u8> {
+        let mut file = f.as_file();
+        let mut v = vec![0u8; len];
+        file.seek(SeekFrom::Start(offset)).unwrap();
+        file.read_exact(&mut v).unwrap();
+        v
+    }
+
+    fn nothing_in_flight(block: &VirtioBlock) -> bool {
+        !block.disk.file_engine.bounce_in_progress()
+            && block
+                .disk
+                .file_engine
+                .can_proceed(block_io::direct::Wait::Span(0, u64::MAX))
+    }
+
+    // An aligned write W of block 1 in flight, then a sub-block write S of block 1 (a
+    // read-modify-write), an aligned write W2 of block 1 and an aligned read R of block 2. S
+    // waits at the head of the queue without the VMM thread waiting: queue events and direct
+    // process_queue calls while held pop nothing. W's completion starts S; W2 (on S's span)
+    // waits for S, R behind it (the queue is FIFO); S's completion lets them go. Each request
+    // completes exactly once, and block 1 ends as W2 wrote it: had W2 landed between S's read
+    // and its write-back, S would have put W's bytes back.
+    #[test]
+    fn test_direct_bounce_deferred_ordering() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, f) = direct_block(&mem, &vq);
+        mem.write_slice(&[0xaa; 4096], GuestAddress(0x10000))
+            .unwrap();
+        mem.write_slice(&[0x33; 512], GuestAddress(0x11200))
+            .unwrap();
+        mem.write_slice(&[0xbb; 4096], GuestAddress(0x12000))
+            .unwrap();
+        put_req(&vq, 0, true, 4096, 0x10000, 4096);
+        put_req(&vq, 1, true, 4096 + 1536, 0x11200, 512);
+        put_req(&vq, 2, true, 4096, 0x12000, 4096);
+        put_req(&vq, 3, false, 8192, 0x13000, 4096);
+        vq.avail.idx.set(4);
+
+        simulate_queue_event(&mut block, Some(false));
+        assert_eq!(vq.used.idx.get(), 0);
+        assert!(block.bounce_hold.is_some());
+        assert_eq!(
+            block.queues[0].next_avail.0, 1,
+            "S went back to the head of the queue"
+        );
+        assert_eq!(block.metrics.direct_bounce_deferred.count(), 1);
+        // Held: a guest notification or a rate-limiter wake-up pops nothing.
+        simulate_queue_event(&mut block, Some(false));
+        block.process_queue(0).unwrap();
+        assert_eq!(block.queues[0].next_avail.0, 1);
+        assert_eq!(block.metrics.direct_bounce_deferred.count(), 1);
+
+        // W completes: S starts; W2 (its span) waits for it, R behind W2.
+        complete_until(&mut block, &vq, 1);
+        assert_eq!(vq.used.ring[0].get().id, 0);
+        if block.disk.file_engine.rmw_in_progress() {
+            assert_eq!(block.queues[0].next_avail.0, 2, "W2 waits for the RMW");
+            assert_eq!(block.metrics.direct_bounce_deferred.count(), 2);
+        }
+        complete_until(&mut block, &vq, 4);
+        assert_eq!(vq.used.idx.get(), 4);
+        let mut ids: Vec<u32> = (0..4).map(|k| vq.used.ring[k].get().id).collect();
+        assert_eq!(&ids[..2], &[0, 3], "W then S");
+        ids.sort_unstable();
+        assert_eq!(ids, vec![0, 3, 6, 9], "each request once");
+        for i in 0..4 {
+            assert_eq!(u32::from(req_status(&mem, i)), VIRTIO_BLK_S_OK);
+        }
+        assert_eq!(file_bytes(&f, 4096, 4096), vec![0xbb; 4096], "W2 last");
+        let mut got = vec![0u8; 4096];
+        mem.read_slice(&mut got, GuestAddress(0x13000)).unwrap();
+        assert_eq!(got, vec![0x11; 4096]);
+        assert!(block.bounce_hold.is_none());
+        assert_eq!(block.metrics.direct_rmw_writes.count(), 1);
+        // Nothing left anywhere: no completion appears twice.
+        complete_until(&mut block, &vq, 4);
+        assert_eq!(vq.used.idx.get(), 4);
+        assert!(nothing_in_flight(&block));
+    }
+
+    // While a read-modify-write runs, a read of its span and a write elsewhere are submitted at
+    // once; a write of its span waits for it, at the head of the queue.
+    #[test]
+    fn test_direct_bounce_rmw_exclusion_is_its_span() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, f) = direct_block(&mem, &vq);
+        mem.write_slice(&[0x5d; 512], GuestAddress(0x10200))
+            .unwrap();
+        mem.write_slice(&[0x3c; 4096], GuestAddress(0x12000))
+            .unwrap();
+        mem.write_slice(&[0xcc; 4096], GuestAddress(0x13000))
+            .unwrap();
+        put_req(&vq, 0, true, 4096 + 512, 0x10200, 512);
+        put_req(&vq, 1, false, 4096, 0x11000, 4096);
+        put_req(&vq, 2, true, 3 * 4096, 0x12000, 4096);
+        put_req(&vq, 3, true, 4096, 0x13000, 4096);
+        vq.avail.idx.set(4);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.disk.file_engine.rmw_in_progress());
+        assert_eq!(
+            block.queues[0].next_avail.0, 3,
+            "the read and the write of block 3 went"
+        );
+        assert!(block.bounce_hold.is_some());
+        complete_until(&mut block, &vq, 4);
+        for i in 0..4 {
+            assert_eq!(u32::from(req_status(&mem, i)), VIRTIO_BLK_S_OK);
+        }
+        assert_eq!(file_bytes(&f, 3 * 4096, 4096), vec![0x3c; 4096]);
+        assert_eq!(
+            file_bytes(&f, 4096, 4096),
+            vec![0xcc; 4096],
+            "the write of its span last"
+        );
+        let mut got = vec![0u8; 4096];
+        mem.read_slice(&mut got, GuestAddress(0x11000)).unwrap();
+        let mut after = vec![0x11u8; 4096];
+        after[512..1024].copy_from_slice(&[0x5d; 512]);
+        assert!(
+            got == vec![0x11; 4096] || got == after,
+            "the block before or after the RMW"
+        );
+    }
+
+    // The rate limiter charges a deferred request once: with an ops budget of exactly three,
+    // W, the deferred S and R all go through without a throttling event.
+    #[test]
+    fn test_direct_bounce_deferred_rate_limiter() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, _f) = direct_block(&mem, &vq);
+        set_rate_limiter(&mut block, RateLimiter::new(0, 0, 0, 3, 0, 1_000_000));
+        put_req(&vq, 0, true, 4096, 0x10000, 4096);
+        put_req(&vq, 1, true, 4096 + 512, 0x11200, 512);
+        put_req(&vq, 2, false, 8192, 0x12000, 4096);
+        vq.avail.idx.set(3);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.bounce_hold.is_some());
+        complete_until(&mut block, &vq, 3);
+        assert_eq!(block.metrics.rate_limiter_throttled_events.count(), 0);
+        assert!(!block.rate_limiter.is_blocked());
+        for i in 0..3 {
+            assert_eq!(u32::from(req_status(&mem, i)), VIRTIO_BLK_S_OK);
+        }
+    }
+
+    // Snapshot while a request is deferred: prepare_save completes what is in flight and leaves
+    // the deferred request untouched in the queue (it is saved as not yet processed); the kick
+    // of the resume processes it.
+    #[test]
+    fn test_direct_bounce_deferred_snapshot() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, f) = direct_block(&mem, &vq);
+        mem.write_slice(&[0x5a; 512], GuestAddress(0x11200))
+            .unwrap();
+        put_req(&vq, 0, true, 4096, 0x10000, 4096);
+        put_req(&vq, 1, true, 4096 + 512, 0x11200, 512);
+        vq.avail.idx.set(2);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.bounce_hold.is_some());
+
+        block.prepare_save();
+        assert_eq!(vq.used.idx.get(), 1, "W completed by prepare_save");
+        assert_eq!(req_status(&mem, 1), 0xff, "S not processed");
+        assert_eq!(block.queues[0].next_avail.0, 1);
+        assert!(nothing_in_flight(&block));
+
+        // Resume: the devices are kicked (Vmm::resume_vm -> kick_virtio_devices).
+        block.kick();
+        block.process_queue_event();
+        complete_until(&mut block, &vq, 2);
+        assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_OK);
+        assert_eq!(file_bytes(&f, 4096 + 512, 512), vec![0x5a; 512]);
+    }
+
+    // Snapshot while a read-modify-write runs: prepare_save runs it to its end (its second
+    // transfer is queued by the completion of its first), so nothing is in flight in the saved
+    // state; the write of its span held behind it is processed after the resume.
+    #[test]
+    fn test_direct_bounce_running_snapshot() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, f) = direct_block(&mem, &vq);
+        mem.write_slice(&[0x6b; 512], GuestAddress(0x11200))
+            .unwrap();
+        mem.write_slice(&[0x77; 4096], GuestAddress(0x12000))
+            .unwrap();
+        put_req(&vq, 0, true, 8192 + 1024, 0x11200, 512);
+        put_req(&vq, 1, true, 8192, 0x12000, 4096);
+        vq.avail.idx.set(2);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.disk.file_engine.rmw_in_progress());
+        assert!(block.bounce_hold.is_some(), "the write of its span waits");
+        block.prepare_save();
+        assert!(nothing_in_flight(&block));
+        assert_eq!(vq.used.idx.get(), 1);
+        assert_eq!(u32::from(req_status(&mem, 0)), VIRTIO_BLK_S_OK);
+        assert_eq!(
+            req_status(&mem, 1),
+            0xff,
+            "the write behind it was not processed"
+        );
+        let mut want = vec![0x11u8; 4096];
+        want[1024..1536].copy_from_slice(&[0x6b; 512]);
+        assert_eq!(file_bytes(&f, 8192, 4096), want);
+        block.kick();
+        block.process_queue_event();
+        complete_until(&mut block, &vq, 2);
+        assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_OK);
+        assert_eq!(file_bytes(&f, 8192, 4096), vec![0x77; 4096]);
+    }
+
+    // PATCH while a read-modify-write runs: it completes on the old backing first; the write of
+    // its span held behind it then runs on the new backing. PATCH while a read-modify-write is
+    // deferred: it runs on the new backing.
+    #[test]
+    fn test_direct_bounce_patch() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, f) = direct_block(&mem, &vq);
+        let g = TempFile::new().unwrap();
+        g.as_file().write_all(&[0x22; 0x10000]).unwrap();
+        mem.write_slice(&[0x7c; 512], GuestAddress(0x11200))
+            .unwrap();
+        mem.write_slice(&[0x99; 4096], GuestAddress(0x12000))
+            .unwrap();
+        put_req(&vq, 0, true, 512, 0x11200, 512);
+        put_req(&vq, 1, true, 0, 0x12000, 4096);
+        vq.avail.idx.set(2);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.disk.file_engine.rmw_in_progress());
+        block
+            .update_disk_image(g.as_path().to_str().unwrap().to_string())
+            .unwrap();
+        complete_until(&mut block, &vq, 2);
+        assert_eq!(u32::from(req_status(&mem, 0)), VIRTIO_BLK_S_OK);
+        assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_OK);
+        assert_eq!(
+            file_bytes(&f, 512, 512),
+            vec![0x7c; 512],
+            "S on the old backing"
+        );
+        assert_eq!(
+            file_bytes(&f, 0, 512),
+            vec![0x11; 512],
+            "W2 not on the old backing"
+        );
+        assert_eq!(
+            file_bytes(&g, 0, 4096),
+            vec![0x99; 4096],
+            "W2 on the new backing"
+        );
+
+        // Deferred behind an aligned write of its block: after PATCH it runs on the new backing
+        // (the aligned write in flight on the replaced ring is the pre-existing upstream
+        // behaviour of PATCH with I/O in flight, not asserted here).
+        let h = TempFile::new().unwrap();
+        h.as_file().write_all(&[0x33; 0x10000]).unwrap();
+        mem.write_slice(&[0x4d; 512], GuestAddress(0x13200))
+            .unwrap();
+        put_req(&vq, 2, true, 16384, 0x10000, 4096);
+        put_req(&vq, 3, true, 16384 + 512, 0x13200, 512);
+        vq.avail.idx.set(4);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.bounce_hold.is_some());
+        block
+            .update_disk_image(h.as_path().to_str().unwrap().to_string())
+            .unwrap();
+        for _ in 0..100 {
+            if req_status(&mem, 3) != 0xff {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+            if let FileEngine::Async(ref mut engine) = block.disk.file_engine {
+                engine.drain(false).unwrap();
+            }
+            block.process_async_completion_event();
+        }
+        assert_eq!(u32::from(req_status(&mem, 3)), VIRTIO_BLK_S_OK);
+        let mut want = vec![0x33u8; 4096];
+        want[512..1024].copy_from_slice(&[0x4d; 512]);
+        assert_eq!(file_bytes(&h, 16384, 4096), want);
+    }
+
+    // A device reset drops the hold with everything else.
+    #[test]
+    fn test_direct_bounce_reset() {
+        let mem = single_region_mem(0x40000);
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        let (mut block, _f) = direct_block(&mem, &vq);
+        put_req(&vq, 0, true, 4096, 0x10000, 4096);
+        put_req(&vq, 1, true, 4096 + 512, 0x11200, 512);
+        vq.avail.idx.set(2);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.bounce_hold.is_some());
+        assert!(block._reset());
+        assert!(block.bounce_hold.is_none());
+        assert!(nothing_in_flight(&block));
+    }
+
+    // A drive with direct_write whose backing is a regular file of a size that is not a
+    // multiple of 4096 runs buffered as a whole; the requested mode is kept (snapshot, PATCH).
+    #[test]
+    fn test_direct_write_inexact_file_runs_buffered() {
+        let f = TempFile::new().unwrap();
+        f.as_file().set_len(0x10000 + 512).unwrap();
+        let mut disk = DiskProperties::new(
+            f.as_path().to_str().unwrap().to_string(),
+            false,
+            FileEngineType::Async,
+            false,
+            true,
+        )
+        .unwrap();
+        assert!(disk.direct_write);
+        assert!(disk.file_engine.dio().is_none());
+        assert!(disk.file_engine.direct_file().is_none());
+        assert_eq!(disk.nsectors, 0x10000 / 512 + 1);
+        // PATCH to an exact file: direct I/O again.
+        let g = TempFile::new().unwrap();
+        g.as_file().set_len(0x10000).unwrap();
+        disk.update(g.as_path().to_str().unwrap().to_string(), false)
+            .unwrap();
+        assert!(disk.file_engine.dio().is_some());
     }
 }

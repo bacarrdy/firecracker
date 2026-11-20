@@ -58,7 +58,7 @@ pub struct BlockDeviceConfig {
     pub path_on_host: Option<String>,
     /// Rate Limiter for I/O operations.
     pub rate_limiter: Option<RateLimiterConfig>,
-    /// If true, aligned guest writes use host direct I/O while reads remain buffered.
+    /// Request host direct I/O for guest reads and writes on a writable virtio-block drive.
     pub direct_write: Option<bool>,
     /// The type of IO engine used by the device.
     // #[serde(default)]

@@ -10,7 +10,7 @@ use vm_memory::{GuestMemoryBackend, GuestMemoryError, ReadVolatile, WriteVolatil
 
 use crate::vstate::memory::{GuestAddress, GuestMemoryMmap};
 
-use super::direct_io_eligible;
+use super::direct::{BounceBuf, BouncePlan, DioAlign, bounce_buf, run_sync};
 
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
 pub enum SyncIoError {
@@ -24,12 +24,19 @@ pub enum SyncIoError {
     SyncAll(std::io::Error),
     /// Transfer: {0}
     Transfer(GuestMemoryError),
+    /// Direct I/O request not aligned for the O_DIRECT descriptor (it needs the bounce path)
+    DirectUnaligned,
+    /// Direct I/O bounce after {1} guest bytes: {0}
+    Bounce(std::io::Error, u32),
 }
 
 #[derive(Debug)]
 pub struct SyncFileEngine {
     file: File,
     direct_file: Option<File>,
+    dio: Option<DioAlign>,
+    /// Direct I/O: the drive's bounce buffer, allocated at the first bounce.
+    bounce_buf: Option<BounceBuf>,
 }
 
 // SAFETY: `File` is send and ultimately a POD.
@@ -83,22 +90,69 @@ pub(super) fn file_discard_range(file: &File, range: (u64, u32)) -> Result<u32, 
 
 impl SyncFileEngine {
     pub fn from_file(file: File, direct_file: Option<File>) -> SyncFileEngine {
-        SyncFileEngine { file, direct_file }
+        // A backing that direct I/O cannot serve exactly runs on the buffered descriptor alone.
+        let dio = direct_file.as_ref().and_then(DioAlign::probe);
+        SyncFileEngine {
+            file,
+            direct_file: direct_file.filter(|_| dio.is_some()),
+            dio,
+            bounce_buf: None,
+        }
+    }
+
+    /// The `O_DIRECT` alignment when the drive does direct I/O, else `None`.
+    pub fn dio(&self) -> Option<DioAlign> {
+        self.dio
     }
 
     pub fn file(&self) -> &File {
         &self.file
     }
 
-    #[cfg(test)]
     pub fn direct_file(&self) -> Option<&File> {
         self.direct_file.as_ref()
     }
 
     /// Update the backing file of the engine
     pub fn update_file(&mut self, file: File, direct_file: Option<File>) {
+        self.dio = direct_file.as_ref().and_then(DioAlign::probe);
         self.file = file;
-        self.direct_file = direct_file;
+        self.direct_file = direct_file.filter(|_| self.dio.is_some());
+    }
+
+    /// The data descriptor: the O_DIRECT one on a direct-I/O drive (a request it cannot take as
+    /// is must go through `bounce`, never through the buffered one).
+    fn data_file(&mut self, buf: usize, offset: u64, count: u32) -> Result<&mut File, SyncIoError> {
+        match (self.direct_file.as_mut(), self.dio) {
+            (Some(direct_file), Some(dio)) if dio.eligible(buf, offset, count) => Ok(direct_file),
+            (Some(_), Some(_)) => Err(SyncIoError::DirectUnaligned),
+            _ => Ok(&mut self.file),
+        }
+    }
+
+    /// Serve a request the O_DIRECT descriptor cannot take as is, in place, through the bounce
+    /// buffer (nothing else is ever in flight on a `Sync` drive).
+    pub fn bounce(
+        &mut self,
+        plan: &mut BouncePlan,
+        mem: &GuestMemoryMmap,
+    ) -> Result<(), SyncIoError> {
+        let (Some(direct_file), Some(dio)) = (self.direct_file.as_ref(), self.dio) else {
+            return Err(SyncIoError::DirectUnaligned);
+        };
+        let buf = bounce_buf(&mut self.bounce_buf, dio).map_err(|e| SyncIoError::Bounce(e, 0))?;
+        run_sync(plan, direct_file, mem, buf).map_err(|e| SyncIoError::Bounce(e, plan.completed()))
+    }
+
+    #[cfg(test)]
+    pub fn bounce_buf_len(&self) -> Option<u64> {
+        self.bounce_buf.as_ref().map(BounceBuf::len)
+    }
+
+    /// Test hook: pretend the backing has this alignment.
+    #[cfg(test)]
+    pub fn set_dio_for_test(&mut self, dio: DioAlign) {
+        self.dio = Some(dio);
     }
 
     pub fn read(
@@ -108,11 +162,17 @@ impl SyncFileEngine {
         addr: GuestAddress,
         count: u32,
     ) -> Result<u32, SyncIoError> {
-        self.file
-            .seek(SeekFrom::Start(offset))
+        let mut slice = mem
+            .get_slice(addr, count as usize)
+            .map_err(SyncIoError::Transfer)?;
+        let buf = slice.ptr_guard().as_ptr() as usize;
+        // A direct-I/O drive reads through the O_DIRECT descriptor too (requests it cannot take
+        // as is were bounced before reaching the engine).
+        let file = self.data_file(buf, offset, count)?;
+        file.seek(SeekFrom::Start(offset))
             .map_err(SyncIoError::Seek)?;
-        mem.get_slice(addr, count as usize)
-            .and_then(|mut slice| Ok(self.file.read_exact_volatile(&mut slice)?))
+        file.read_exact_volatile(&mut slice)
+            .map_err(GuestMemoryError::from)
             .map_err(SyncIoError::Transfer)?;
         Ok(count)
     }
@@ -128,10 +188,7 @@ impl SyncFileEngine {
             .get_slice(addr, count as usize)
             .map_err(SyncIoError::Transfer)?;
         let buf = slice.ptr_guard().as_ptr() as usize;
-        let file = match self.direct_file.as_mut() {
-            Some(direct_file) if direct_io_eligible(buf, offset, count) => direct_file,
-            _ => &mut self.file,
-        };
+        let file = self.data_file(buf, offset, count)?;
 
         file.seek(SeekFrom::Start(offset))
             .map_err(SyncIoError::Seek)?;

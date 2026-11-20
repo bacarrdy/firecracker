@@ -5,6 +5,8 @@
 
 pub mod device;
 mod event_handler;
+#[cfg(test)]
+mod event_tests;
 mod io;
 pub mod metrics;
 pub mod persist;

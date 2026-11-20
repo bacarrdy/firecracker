@@ -184,6 +184,16 @@ pub struct BlockDeviceMetrics {
     pub io_engine_throttled_events: SharedIncMetric,
     /// Number of remaining requests in the queue.
     pub remaining_reqs_count: SharedIncMetric,
+    /// Direct-I/O drive: reads served through an aligned bounce buffer (unaligned guest request).
+    pub direct_bounce_reads: SharedIncMetric,
+    /// Direct-I/O drive: whole-block writes copied into an aligned bounce buffer.
+    pub direct_bounce_writes: SharedIncMetric,
+    /// Direct-I/O drive: partial-block writes done as a read-modify-write.
+    pub direct_rmw_writes: SharedIncMetric,
+    /// Direct-I/O drive: requests that waited at the head of the queue for the bounce path
+    /// (writes on its span to finish before a read-modify-write, the bounce in progress, or a
+    /// write on the span of the read-modify-write in progress to wait for it).
+    pub direct_bounce_deferred: SharedIncMetric,
 }
 
 impl BlockDeviceMetrics {
@@ -230,6 +240,14 @@ impl BlockDeviceMetrics {
             .add(other.io_engine_throttled_events.fetch_diff());
         self.remaining_reqs_count
             .add(other.remaining_reqs_count.fetch_diff());
+        self.direct_bounce_reads
+            .add(other.direct_bounce_reads.fetch_diff());
+        self.direct_bounce_writes
+            .add(other.direct_bounce_writes.fetch_diff());
+        self.direct_rmw_writes
+            .add(other.direct_rmw_writes.fetch_diff());
+        self.direct_bounce_deferred
+            .add(other.direct_bounce_deferred.fetch_diff());
     }
 }
 

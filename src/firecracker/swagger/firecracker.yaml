@@ -1258,10 +1258,10 @@ definitions:
       direct_write:
         type: boolean
         description:
-          If true, aligned guest write requests use direct I/O on the host while
-          reads remain buffered. Unaligned writes fall back to the buffered file
-          descriptor. Host direct I/O alignment requirements depend on the
-          backing filesystem and kernel.
+          Request host direct I/O for reads and writes on a writable virtio-block
+          drive. Unaligned requests use an aligned bounce buffer. Regular
+          files with a size not divisible by 4096 use buffered I/O throughout.
+          Omit this field for vhost-user-block configurations.
         default: false
       io_engine:
         type: string

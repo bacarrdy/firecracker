@@ -20,7 +20,7 @@ pub use crate::devices::virtio::generated::virtio_blk::{
 };
 use crate::devices::virtio::queue::DescriptorChain;
 use crate::logger::{IncMetric, error};
-use crate::rate_limiter::{RateLimiter, TokenType};
+use crate::rate_limiter::{BudgetReservation, RateLimiter};
 use crate::vstate::memory::{ByteValued, Bytes, GuestAddress, GuestMemoryMmap};
 
 #[derive(Debug)]
@@ -59,6 +59,30 @@ pub enum ProcessingResult {
     Submitted,
     Throttled,
     Executed(FinishedRequest),
+    /// Direct I/O: the request waits at the head of the queue (`FileEngineOk::Deferred`).
+    Deferred(block_io::direct::Wait),
+}
+
+/// The rate limiter's charge for one request (`Request::rate_limit_charge`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RateLimitCharge {
+    ops: u64,
+    bytes: Option<u64>,
+}
+
+impl RateLimitCharge {
+    pub(crate) fn take(self, rate_limiter: &mut RateLimiter) -> Option<BudgetReservation<'_>> {
+        rate_limiter.reserve(self.ops, self.bytes)
+    }
+}
+
+/// Count a request served through the direct-I/O bounce path.
+pub(crate) fn count_bounce(block_metrics: &BlockDeviceMetrics, kind: block_io::direct::Bounce) {
+    match kind {
+        block_io::direct::Bounce::Read => block_metrics.direct_bounce_reads.inc(),
+        block_io::direct::Bounce::Write => block_metrics.direct_bounce_writes.inc(),
+        block_io::direct::Bounce::ReadModifyWrite => block_metrics.direct_rmw_writes.inc(),
+    }
 }
 
 #[derive(Debug)]
@@ -155,6 +179,18 @@ impl PendingRequest {
         res: Result<u32, IoErr>,
         block_metrics: &BlockDeviceMetrics,
     ) -> FinishedRequest {
+        self.finish_with_progress(mem, res, 0, block_metrics)
+    }
+
+    /// Complete a request after a terminal error that may have transferred a known prefix.
+    pub fn finish_with_progress(
+        self,
+        mem: &GuestMemoryMmap,
+        res: Result<u32, IoErr>,
+        known_prefix: u32,
+        block_metrics: &BlockDeviceMetrics,
+    ) -> FinishedRequest {
+        let known_prefix = known_prefix.min(self.data_len);
         let status = match (res, self.r#type) {
             (Ok(transferred_data_len), RequestType::In) => {
                 let status = Status::from_data(self.data_len, transferred_data_len, true);
@@ -187,10 +223,23 @@ impl PendingRequest {
             (Err(IoErr::UnsupportedRequest(op)), _) | (_, RequestType::Unsupported(op)) => {
                 Status::Unsupported { op }
             }
-            (Err(err), _) => Status::IoErr {
-                num_bytes_to_mem: 0,
-                err,
-            },
+            (Err(err), ty) => {
+                let num_bytes_to_mem = match ty {
+                    RequestType::In => {
+                        block_metrics.read_bytes.add(known_prefix.into());
+                        known_prefix
+                    }
+                    RequestType::Out => {
+                        block_metrics.write_bytes.add(known_prefix.into());
+                        0
+                    }
+                    _ => 0,
+                };
+                Status::IoErr {
+                    num_bytes_to_mem,
+                    err,
+                }
+            }
         };
 
         self.write_status_and_finish(&status, mem, block_metrics)
@@ -399,24 +448,15 @@ impl Request {
         Ok(())
     }
 
-    pub(crate) fn rate_limit(&self, rate_limiter: &mut RateLimiter) -> bool {
-        // If limiter.consume() fails it means there is no more TokenType::Ops
-        // budget and rate limiting is in effect.
-        if !rate_limiter.consume(1, TokenType::Ops) {
-            return true;
-        }
-        // Exercise the rate limiter only if this request is of data transfer type.
-        if self.r#type == RequestType::In || self.r#type == RequestType::Out {
-            // If limiter.consume() fails it means there is no more TokenType::Bytes
-            // budget and rate limiting is in effect.
-            if !rate_limiter.consume(u64::from(self.data_len), TokenType::Bytes) {
-                // Revert the OPS consume().
-                rate_limiter.manual_replenish(1, TokenType::Ops);
-                return true;
-            }
-        }
-
-        false
+    /// What the rate limiter charges for this request: one operation, and its data bytes if it
+    /// is a read or a write (the only requests the bandwidth bucket accounts for). Taking and
+    /// refunding the charge both use this one value.
+    pub(crate) fn rate_limit_charge(&self) -> RateLimitCharge {
+        let bytes = match self.r#type {
+            RequestType::In | RequestType::Out => Some(u64::from(self.data_len)),
+            _ => None,
+        };
+        RateLimitCharge { ops: 1, bytes }
     }
 
     fn offset(&self) -> u64 {
@@ -479,16 +519,22 @@ impl Request {
 
         match res {
             Ok(block_io::FileEngineOk::Submitted) => ProcessingResult::Submitted,
+            Ok(block_io::FileEngineOk::Deferred(wait)) => ProcessingResult::Deferred(wait),
             Ok(block_io::FileEngineOk::Executed(res)) => {
+                if let Some(kind) = res.bounce {
+                    count_bounce(block_metrics, kind);
+                }
                 ProcessingResult::Executed(res.req.finish(mem, Ok(res.count), block_metrics))
             }
             Err(err) => {
                 if err.error.is_throttling_err() {
                     ProcessingResult::Throttled
                 } else {
-                    ProcessingResult::Executed(err.req.finish(
+                    let progress = err.error.progress();
+                    ProcessingResult::Executed(err.req.finish_with_progress(
                         mem,
                         Err(IoErr::FileEngine(err.error)),
+                        progress,
                         block_metrics,
                     ))
                 }
@@ -519,6 +565,64 @@ mod tests {
                 desc_idx: 0,
             }
         }
+    }
+
+    // The rate limiter's charge is decided in one place: one op for every request, data bytes
+    // for reads and writes only; a refund gives back exactly what was taken (a discard deferred
+    // behind a read-modify-write must not refill the bandwidth bucket).
+    #[test]
+    fn test_rate_limit_charge_and_refund() {
+        let req = |t, data_len| Request {
+            r#type: t,
+            data_len,
+            status_addr: GuestAddress(0),
+            sector: 0,
+            data_addr: GuestAddress(0),
+        };
+        assert_eq!(
+            req(RequestType::In, 4096).rate_limit_charge(),
+            RateLimitCharge {
+                ops: 1,
+                bytes: Some(4096)
+            }
+        );
+        assert_eq!(
+            req(RequestType::Out, 512).rate_limit_charge().bytes,
+            Some(512)
+        );
+        for t in [
+            RequestType::Discard,
+            RequestType::Flush,
+            RequestType::GetDeviceID,
+            RequestType::Unsupported(42),
+        ] {
+            assert_eq!(
+                req(t, 1 << 20).rate_limit_charge(),
+                RateLimitCharge {
+                    ops: 1,
+                    bytes: None
+                }
+            );
+        }
+        // 1 MiB of bandwidth and 100 ops, refilled over 1000 s: no refill during the test.
+        let mut rl = RateLimiter::new(1 << 20, 0, 1_000_000, 100, 0, 1_000_000);
+        let bytes0 = rl.bandwidth().unwrap().budget();
+        let ops0 = rl.ops().unwrap().budget();
+        for t in [RequestType::Out, RequestType::Discard] {
+            let charge = req(t, 65536).rate_limit_charge();
+            charge.take(&mut rl).unwrap().cancel();
+            assert_eq!(rl.bandwidth().unwrap().budget(), bytes0, "{t:?}");
+            assert_eq!(rl.ops().unwrap().budget(), ops0, "{t:?}");
+        }
+        // A discard costs no bandwidth.
+        assert!(
+            req(RequestType::Discard, 65536)
+                .rate_limit_charge()
+                .take(&mut rl)
+                .is_some()
+        );
+        assert_eq!(rl.bandwidth().unwrap().budget(), bytes0);
+        assert_eq!(rl.ops().unwrap().budget(), ops0 - 1);
     }
 
     #[test]

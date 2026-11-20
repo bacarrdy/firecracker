@@ -91,6 +91,12 @@ pub struct IoUring<T> {
     // and the ops that are in the CQ, but haven't been popped yet.
     num_ops: u32,
     slab: slab::Slab<T>,
+    /// Test hook: fail this many of the next `push` calls (full submission queue).
+    #[cfg(test)]
+    pub fail_pushes: u32,
+    /// Test hook: fail this many of the next `submit` calls (EAGAIN).
+    #[cfg(test)]
+    pub fail_submits: u32,
 }
 
 impl<T: Debug> IoUring<T> {
@@ -157,6 +163,10 @@ impl<T: Debug> IoUring<T> {
             registered_fds_count: 0,
             num_ops: 0,
             slab,
+            #[cfg(test)]
+            fail_pushes: 0,
+            #[cfg(test)]
+            fail_submits: 0,
         };
 
         instance.check_operations(required_ops)?;
@@ -176,6 +186,11 @@ impl<T: Debug> IoUring<T> {
 
     /// Push an [`Operation`](operation/struct.Operation.html) onto the submission queue.
     pub fn push(&mut self, op: Operation<T>) -> Result<(), (IoUringError, T)> {
+        #[cfg(test)]
+        if self.fail_pushes > 0 {
+            self.fail_pushes -= 1;
+            return Err((IoUringError::SQueue(SQueueError::FullQueue), op.user_data));
+        }
         // validate that we actually did register fds
         let fd = op.fd();
         match self.registered_fds_count {
@@ -235,6 +250,13 @@ impl<T: Debug> IoUring<T> {
 
     /// Submit all operations but don't wait for any completions.
     pub fn submit(&mut self) -> Result<u32, IoUringError> {
+        #[cfg(test)]
+        if self.fail_submits > 0 {
+            self.fail_submits -= 1;
+            return Err(IoUringError::SQueue(SQueueError::Submit(
+                std::io::Error::from_raw_os_error(libc::EAGAIN),
+            )));
+        }
         self.do_submit(0)
     }
 
@@ -263,6 +285,12 @@ impl<T: Debug> IoUring<T> {
     /// in-flight ops.
     pub fn num_ops(&self) -> u32 {
         self.num_ops
+    }
+
+    /// The user data of every operation pushed and not popped yet (queued, in flight, or
+    /// completed and waiting in the completion queue).
+    pub fn pending_user_data(&self) -> impl Iterator<Item = &T> {
+        self.slab.iter().map(|(_, user_data)| user_data)
     }
 
     fn enable(&mut self) -> Result<(), IoUringError> {

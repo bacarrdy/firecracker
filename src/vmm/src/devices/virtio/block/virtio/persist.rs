@@ -150,6 +150,7 @@ impl Persist<'_> for VirtioBlock {
             disk: disk_properties,
             rate_limiter,
             is_io_engine_throttled: false,
+            bounce_hold: None,
             metrics: BlockMetricsPerDevice::alloc(state.id.clone()),
         })
     }
