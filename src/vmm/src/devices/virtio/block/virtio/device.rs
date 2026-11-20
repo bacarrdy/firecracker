@@ -14,6 +14,7 @@ use std::os::fd::AsRawFd;
 use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
 use std::path::PathBuf;
+use std::os::unix::fs::OpenOptionsExt;
 use std::sync::Arc;
 
 use block_io::FileEngine;
@@ -63,6 +64,7 @@ pub struct DiskProperties {
     pub file_engine: FileEngine,
     pub nsectors: u64,
     pub image_id: [u8; VIRTIO_BLK_ID_BYTES as usize],
+    pub direct_write: bool,
 }
 
 impl DiskProperties {
@@ -71,7 +73,25 @@ impl DiskProperties {
         OpenOptions::new()
             .read(true)
             .write(!is_disk_read_only)
-            .open(PathBuf::from(&disk_image_path))
+            .open(disk_image_path)
+            .map_err(|x| VirtioBlockError::BackingFile(x, disk_image_path.to_string()))
+    }
+
+    fn open_direct_file(
+        disk_image_path: &str,
+        is_disk_read_only: bool,
+        direct_write: bool,
+    ) -> Result<Option<File>, VirtioBlockError> {
+        if !direct_write || is_disk_read_only {
+            return Ok(None);
+        }
+
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_DIRECT)
+            .open(disk_image_path)
+            .map(Some)
             .map_err(|x| VirtioBlockError::BackingFile(x, disk_image_path.to_string()))
     }
 
@@ -100,17 +120,27 @@ impl DiskProperties {
         is_disk_read_only: bool,
         file_engine_type: FileEngineType,
         discard: bool,
+        direct_write: bool,
     ) -> Result<Self, VirtioBlockError> {
         let mut disk_image = Self::open_file(&disk_image_path, is_disk_read_only)?;
+        let direct_disk_image =
+            Self::open_direct_file(&disk_image_path, is_disk_read_only, direct_write)?;
+        let direct_write = direct_disk_image.is_some();
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
         let image_id = Self::build_disk_image_id(&disk_image);
 
         Ok(Self {
             file_path: disk_image_path,
-            file_engine: FileEngine::from_file(disk_image, file_engine_type, discard)
+            file_engine: FileEngine::from_file(
+                disk_image,
+                direct_disk_image,
+                file_engine_type,
+                discard,
+            )
                 .map_err(VirtioBlockError::FileEngine)?,
             nsectors: disk_size >> SECTOR_SHIFT,
             image_id,
+            direct_write,
         })
     }
 
@@ -121,11 +151,13 @@ impl DiskProperties {
         is_disk_read_only: bool,
     ) -> Result<(), VirtioBlockError> {
         let mut disk_image = Self::open_file(&disk_image_path, is_disk_read_only)?;
+        let direct_disk_image =
+            Self::open_direct_file(&disk_image_path, is_disk_read_only, self.direct_write)?;
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
 
         self.image_id = Self::build_disk_image_id(&disk_image);
         self.file_engine
-            .update_file_path(disk_image)
+            .update_file_path(disk_image, direct_disk_image)
             .map_err(VirtioBlockError::FileEngine)?;
         self.nsectors = disk_size >> SECTOR_SHIFT;
         self.file_path = disk_image_path;
@@ -323,6 +355,9 @@ pub struct VirtioBlockConfig {
     pub path_on_host: String,
     /// Rate Limiter for I/O operations.
     pub rate_limiter: Option<RateLimiterConfig>,
+    /// If true, aligned guest writes use host direct I/O while reads remain buffered.
+    #[serde(default)]
+    pub direct_write: bool,
     /// The type of IO engine used by the device.
     #[serde(default)]
     #[serde(rename = "io_engine")]
@@ -348,6 +383,7 @@ impl TryFrom<&BlockDeviceConfig> for VirtioBlockConfig {
                 discard: value.discard.unwrap_or(false),
                 path_on_host: path_on_host.clone(),
                 rate_limiter: value.rate_limiter,
+                direct_write: value.direct_write.unwrap_or(false),
                 file_engine_type: value.file_engine_type.unwrap_or_default(),
                 blk_size: value.blk_size,
                 topology: value.topology,
@@ -370,6 +406,7 @@ impl From<VirtioBlockConfig> for BlockDeviceConfig {
             discard: Some(value.discard),
             path_on_host: Some(value.path_on_host),
             rate_limiter: value.rate_limiter,
+            direct_write: Some(value.direct_write),
             file_engine_type: Some(value.file_engine_type),
             blk_size: value.blk_size,
             topology: value.topology,
@@ -433,6 +470,7 @@ impl VirtioBlock {
             config.is_read_only,
             config.file_engine_type,
             config.discard,
+            config.direct_write,
         )?;
 
         let rate_limiter = config
@@ -518,6 +556,7 @@ impl VirtioBlock {
             discard: self.avail_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
             cache_type: self.cache_type,
             rate_limiter: rl.into_option(),
+            direct_write: self.disk.direct_write,
             file_engine_type: self.file_engine_type(),
             blk_size: Some(self.config_space.blk_size),
             topology: Some(self.config_space.topology),
@@ -924,13 +963,19 @@ mod tests {
             discard: None,
             path_on_host: Some("path".to_string()),
             rate_limiter: None,
+            direct_write: Some(true),
+
             file_engine_type: Default::default(),
             blk_size: None,
             topology: None,
 
             socket: None,
         };
-        VirtioBlockConfig::try_from(&block_config).unwrap();
+        assert!(
+            VirtioBlockConfig::try_from(&block_config)
+                .unwrap()
+                .direct_write
+        );
 
         let block_config = BlockDeviceConfig {
             drive_id: "".to_string(),
@@ -942,6 +987,8 @@ mod tests {
             discard: None,
             path_on_host: None,
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: Default::default(),
             blk_size: None,
             topology: None,
@@ -960,6 +1007,8 @@ mod tests {
             discard: None,
             path_on_host: Some("path".to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: Default::default(),
             blk_size: None,
             topology: None,
@@ -982,6 +1031,7 @@ mod tests {
                 true,
                 engine,
                 false,
+                false,
             )
             .unwrap();
 
@@ -990,7 +1040,19 @@ mod tests {
             // Testing `backing_file.virtio_block_disk_image_id()` implies
             // duplicating that logic in tests, so skipping it.
 
-            let res = DiskProperties::new("invalid-disk-path".to_string(), true, engine, false);
+            let disk_properties = DiskProperties::new(
+                String::from(f.as_path().to_str().unwrap()),
+                true,
+                engine,
+                false,
+                true,
+            )
+            .unwrap();
+            assert!(!disk_properties.direct_write);
+            assert!(disk_properties.file_engine.direct_file().is_none());
+
+            let res =
+                DiskProperties::new("invalid-disk-path".to_string(), true, engine, false, false);
             assert!(
                 matches!(res, Err(VirtioBlockError::BackingFile(_, _))),
                 "{:?}",

@@ -905,6 +905,8 @@ pub(crate) mod tests {
                         .to_string(),
                 ),
                 rate_limiter: None,
+                direct_write: None,
+
                 file_engine_type: None,
                 blk_size: None,
                 topology: None,

@@ -913,6 +913,8 @@ pub(crate) mod tests {
             discard: None,
             path_on_host: Some(f.as_path().to_str().unwrap().to_string()),
             rate_limiter: None,
+            direct_write: None,
+
             file_engine_type: None,
             blk_size: None,
             topology: None,
