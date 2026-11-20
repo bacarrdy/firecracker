@@ -67,6 +67,28 @@ multiple of 4096 uses buffered I/O for the entire drive and emits a warning.
 Failure to open the requested direct descriptor is reported to the API caller.
 Read-only drives continue to use their ordinary descriptor.
 
+This is a downstream reference based on v1.17.0. The snapshot block-device
+state contains an additional field and retains the release's format version.
+Use the same reference build for snapshot creation and restore. Compatibility
+with stock v1.17.0 snapshots has not been established.
+
+Earlier downstream testing compared the write-only mode and the bidirectional
+mode on isolated thin-provisioned block devices. A concurrent write/read-back
+workload detected 44 stale read-backs in one baseline run. Repeating the
+workload on the bidirectional build detected zero across the tested cases.
+Three separate fio verification profiles produced zero failures across 384
+runs of that downstream build (32 runs per profile, per engine and per
+512-byte or 4096-byte backing sector size). These measurements predate this
+standalone reference branch.
+
+To exercise the block unit tests, including the real `O_DIRECT` descriptor
+round trip, run the following on Linux with io_uring enabled and a temporary
+filesystem that supports direct I/O:
+
+```shell
+cargo test --locked -p vmm --lib devices::virtio::block:: -- --include-ignored --test-threads=1
+```
+
 ## Host requirements
 
 Firecracker requires a minimum host kernel version of 5.10.51 for the `Async` IO
