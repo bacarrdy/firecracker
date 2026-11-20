@@ -13,7 +13,6 @@ use std::ops::Deref;
 use std::os::fd::AsRawFd;
 use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
-use std::path::PathBuf;
 use std::os::unix::fs::OpenOptionsExt;
 use std::sync::Arc;
 
@@ -451,7 +450,7 @@ impl From<VirtioBlockConfig> for BlockDeviceConfig {
             cache_type: value.cache_type,
 
             is_read_only: Some(value.is_read_only),
-            discard: value.discard.then_some(true),
+            discard: Some(value.discard),
             path_on_host: Some(value.path_on_host),
             rate_limiter: value.rate_limiter,
             direct_write: value.direct_write.then_some(true),
@@ -1169,6 +1168,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Sync,
             blk_size: Some(4096),
             topology: None,
@@ -1197,6 +1197,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Async,
             blk_size: None,
             topology: None,
@@ -1218,6 +1219,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Sync,
             blk_size: None,
             topology: None,
@@ -1229,7 +1231,7 @@ mod tests {
     }
 
     #[test]
-    fn test_discard_requires_negotiated_feature() {
+    fn test_discard_requires_negotiated_feature_both_engines() {
         for engine in [FileEngineType::Sync, FileEngineType::Async] {
             let f = TempFile::new().unwrap();
             f.as_file().set_len(0x1000).unwrap();
@@ -1242,6 +1244,7 @@ mod tests {
                 discard: true,
                 cache_type: CacheType::Unsafe,
                 rate_limiter: None,
+                direct_write: false,
                 file_engine_type: engine,
                 blk_size: None,
                 topology: None,
@@ -1291,6 +1294,7 @@ mod tests {
             discard: true,
             cache_type: CacheType::Unsafe,
             rate_limiter: None,
+            direct_write: false,
             file_engine_type: FileEngineType::Sync,
             blk_size: None,
             topology: None,

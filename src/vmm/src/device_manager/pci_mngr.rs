@@ -856,6 +856,7 @@ mod tests {
       "discard": false,
       "path_on_host": "{}",
       "rate_limiter": null,
+      "direct_write": null,
       "io_engine": "Sync",
       "blk_size": 512,
       "topology": {{

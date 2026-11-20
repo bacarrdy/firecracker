@@ -342,8 +342,8 @@ pub mod tests {
         let first_write = vec![0x5a; DIRECT_WRITE_LEN as usize];
         mem.write(&first_write, addr).unwrap();
 
-        let mut buffered_file = TempFile::new().unwrap().into_file();
-        let mut direct_file = TempFile::new().unwrap().into_file();
+        let buffered_file = TempFile::new().unwrap().into_file();
+        let direct_file = TempFile::new().unwrap().into_file();
         buffered_file.set_len(MEM_LEN as u64).unwrap();
         direct_file.set_len(MEM_LEN as u64).unwrap();
         let mut buffered_check = buffered_file.try_clone().unwrap();

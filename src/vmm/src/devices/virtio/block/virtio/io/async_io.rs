@@ -240,7 +240,6 @@ impl AsyncFileEngine {
         Some(host_major > major || (host_major == major && host_minor >= minor))
     }
 
-    #[cfg(test)]
     pub fn file(&self) -> &File {
         &self.file
     }
