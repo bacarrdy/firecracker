@@ -65,9 +65,13 @@ pub struct DiskProperties {
     pub nsectors: u64,
     pub image_id: [u8; VIRTIO_BLK_ID_BYTES as usize],
     pub direct_write: bool,
+    pub discard_sector_alignment: u32,
 }
 
 impl DiskProperties {
+    const BLKIOMIN: libc::Ioctl = 0x1278;
+    const BLKIOOPT: libc::Ioctl = 0x1279;
+
     // Helper function that opens the file with the proper access permissions
     fn open_file(disk_image_path: &str, is_disk_read_only: bool) -> Result<File, VirtioBlockError> {
         OpenOptions::new()
@@ -114,6 +118,44 @@ impl DiskProperties {
         Ok(disk_size)
     }
 
+    fn block_io_size(
+        disk_image_path: &str,
+        disk_image: &File,
+        request: libc::Ioctl,
+    ) -> Result<u32, VirtioBlockError> {
+        let mut value = 0_u32;
+        // SAFETY: disk_image is a valid fd and both ioctls write one u32 value.
+        if unsafe { libc::ioctl(disk_image.as_raw_fd(), request, &mut value) } < 0 {
+            return Err(VirtioBlockError::BackingFile(
+                std::io::Error::last_os_error(),
+                disk_image_path.to_string(),
+            ));
+        }
+        Ok(value)
+    }
+
+    fn discard_alignment_from_io_sizes(minimum: u32, optimal: u32) -> u32 {
+        minimum.max(optimal).max(SECTOR_SIZE).div_ceil(SECTOR_SIZE)
+    }
+
+    fn discard_sector_alignment(
+        disk_image_path: &str,
+        disk_image: &File,
+    ) -> Result<u32, VirtioBlockError> {
+        if !disk_image
+            .metadata()
+            .map_err(VirtioBlockError::GetFileMetadata)?
+            .file_type()
+            .is_block_device()
+        {
+            return Ok(1);
+        }
+
+        let minimum = Self::block_io_size(disk_image_path, disk_image, Self::BLKIOMIN)?;
+        let optimal = Self::block_io_size(disk_image_path, disk_image, Self::BLKIOOPT)?;
+        Ok(Self::discard_alignment_from_io_sizes(minimum, optimal))
+    }
+
     /// Create a new file for the block device using a FileEngine
     pub fn new(
         disk_image_path: String,
@@ -127,6 +169,8 @@ impl DiskProperties {
             Self::open_direct_file(&disk_image_path, is_disk_read_only, direct_write)?;
         let direct_write = direct_disk_image.is_some();
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
+        let discard_sector_alignment =
+            Self::discard_sector_alignment(&disk_image_path, &disk_image)?;
         let image_id = Self::build_disk_image_id(&disk_image);
 
         Ok(Self {
@@ -141,6 +185,7 @@ impl DiskProperties {
             nsectors: disk_size >> SECTOR_SHIFT,
             image_id,
             direct_write,
+            discard_sector_alignment,
         })
     }
 
@@ -154,12 +199,15 @@ impl DiskProperties {
         let direct_disk_image =
             Self::open_direct_file(&disk_image_path, is_disk_read_only, self.direct_write)?;
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
+        let discard_sector_alignment =
+            Self::discard_sector_alignment(&disk_image_path, &disk_image)?;
 
         self.image_id = Self::build_disk_image_id(&disk_image);
         self.file_engine
             .update_file_path(disk_image, direct_disk_image)
             .map_err(VirtioBlockError::FileEngine)?;
         self.nsectors = disk_size >> SECTOR_SHIFT;
+        self.discard_sector_alignment = discard_sector_alignment;
         self.file_path = disk_image_path;
 
         Ok(())
@@ -403,7 +451,7 @@ impl From<VirtioBlockConfig> for BlockDeviceConfig {
             cache_type: value.cache_type,
 
             is_read_only: Some(value.is_read_only),
-            discard: Some(value.discard),
+            discard: value.discard.then_some(true),
             path_on_host: Some(value.path_on_host),
             rate_limiter: value.rate_limiter,
             direct_write: value.direct_write.then_some(true),
@@ -516,6 +564,13 @@ impl VirtioBlock {
                 config_space.topology = topology;
             }
         }
+
+        // On block devices advertise a discard granularity of at least the device's
+        // minimum/optimal I/O size (e.g. the chunk size of a thin pool) so the guest does
+        // not issue sub-chunk discards that the backend can only treat as no-ops.
+        config_space.discard_sector_alignment = config_space
+            .discard_sector_alignment
+            .max(disk_properties.discard_sector_alignment);
 
         let queue_evts = [EventFd::new(libc::EFD_NONBLOCK).map_err(VirtioBlockError::EventFd)?];
 
@@ -1059,6 +1114,16 @@ mod tests {
                 res
             );
         }
+    }
+
+    #[test]
+    fn test_discard_alignment_from_io_sizes() {
+        assert_eq!(DiskProperties::discard_alignment_from_io_sizes(0, 0), 1);
+        assert_eq!(
+            DiskProperties::discard_alignment_from_io_sizes(131_072, 262_144),
+            512
+        );
+        assert_eq!(DiskProperties::discard_alignment_from_io_sizes(4096, 0), 8);
     }
 
     #[test]

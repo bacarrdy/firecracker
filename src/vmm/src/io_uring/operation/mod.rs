@@ -152,7 +152,10 @@ impl<T: Debug> Operation<T> {
             addr: Some(usize::try_from(offset).unwrap()),
             len: None,
             cmd_op: Some(cmd_op),
-            flags: 0,
+            // Device-mapper targets can reject REQ_NOWAIT discard bios with
+            // EOPNOTSUPP. Force this command into io-wq so the kernel submits
+            // the discard from a blocking context without blocking the VMM.
+            flags: 1 << io_uring_sqe_flags_bit::IOSQE_ASYNC_BIT,
             offset: None,
             addr3: Some(len),
             user_data,
@@ -251,6 +254,10 @@ mod tests {
         );
         assert_eq!(sqe.fd, 0);
         assert_eq!(sqe.len, 0);
+        assert_ne!(
+            sqe.flags & (1 << io_uring_sqe_flags_bit::IOSQE_ASYNC_BIT),
+            0
+        );
         // SAFETY: These are the SQE union fields populated by block_discard().
         let cmd_op = unsafe { sqe.__bindgen_anon_1.__bindgen_anon_1.cmd_op };
         // SAFETY: This is the SQE union field populated by block_discard().

@@ -115,6 +115,7 @@ impl AsyncFileEngine {
                 required_ops.push(OpCode::Fallocate);
             }
             Some(AsyncDiscardOp::BlockUringCmd) => {
+                restrictions.push(Restriction::AllowAsync);
                 restrictions.push(Restriction::AllowOpCode(OpCode::UringCmd));
                 required_ops.push(OpCode::UringCmd);
             }
@@ -272,7 +273,6 @@ impl AsyncFileEngine {
         };
 
         let wrapped_user_data = WrappedRequest::new_with_dirty_tracking(addr, req);
-
         self.ring
             .push(Operation::read(
                 0,

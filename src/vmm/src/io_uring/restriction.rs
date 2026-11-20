@@ -22,6 +22,8 @@ use crate::io_uring::operation::OpCode;
 pub enum Restriction {
     /// Allow an operation.
     AllowOpCode(OpCode),
+    /// Allow operations to be forced through io-wq.
+    AllowAsync,
     /// Only allow operations on pre-registered fds.
     RequireFixedFds,
 }
@@ -40,6 +42,13 @@ impl From<&Restriction> for io_uring_restriction {
                         .unwrap();
                 instance.__bindgen_anon_1.sqe_op = *opcode as u8;
             }
+            AllowAsync => {
+                instance.opcode = u16::try_from(
+                    io_uring_register_restriction_op::IORING_RESTRICTION_SQE_FLAGS_ALLOWED,
+                )
+                .unwrap();
+                instance.__bindgen_anon_1.sqe_flags = 1 << io_uring_sqe_flags_bit::IOSQE_ASYNC_BIT;
+            }
             RequireFixedFds => {
                 instance.opcode = u16::try_from(
                     io_uring_register_restriction_op::IORING_RESTRICTION_SQE_FLAGS_REQUIRED,
@@ -51,5 +60,24 @@ impl From<&Restriction> for io_uring_restriction {
         };
 
         instance
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_allow_async_restriction() {
+        let restriction = io_uring_restriction::from(&Restriction::AllowAsync);
+
+        assert_eq!(
+            restriction.opcode,
+            u16::try_from(io_uring_register_restriction_op::IORING_RESTRICTION_SQE_FLAGS_ALLOWED)
+                .unwrap()
+        );
+        // SAFETY: AllowAsync initializes the sqe_flags union member.
+        let sqe_flags = unsafe { restriction.__bindgen_anon_1.sqe_flags };
+        assert_eq!(sqe_flags, 1 << io_uring_sqe_flags_bit::IOSQE_ASYNC_BIT);
     }
 }
