@@ -30,6 +30,7 @@ use crate::device_manager::{DevicePersistError, DevicesState};
 // serialised virtio transport variant.
 pub use crate::device_manager::VirtioDevicesState;
 use crate::logger::{info, warn};
+use crate::migration::target::ReceivedMemory;
 use crate::resources::VmResources;
 use crate::seccomp::BpfThreadMap;
 use crate::snapshot::Snapshot;
@@ -160,6 +161,8 @@ pub enum CreateSnapshotError {
     SerializeMicrovmState(#[from] crate::snapshot::SnapshotError),
     /// Cannot perform {0} on the snapshot backing file: {1}
     SnapshotBackingFile(&'static str, io::Error),
+    /// Migration error: {0}
+    Migration(#[from] crate::migration::MigrationError),
 }
 
 /// Snapshot version
@@ -199,6 +202,67 @@ pub fn create_snapshot(
         .mark_virtio_queue_memory_dirty(kvm_vm.guest_memory());
 
     Ok(())
+}
+
+/// Creates a state-only snapshot in the pause of a migration: the microVM state to
+/// `snapshot_path`, then the FINAL round to the migration descriptor, in this one call on the VMM
+/// thread.
+///
+/// The order is what keeps the target consistent: saving the state quiesces the devices
+/// (in-flight async block requests complete and mark their pages, the network device gives its
+/// parsed RX buffers back, vsock queues its transport reset event), then the FINAL round takes
+/// the dirty set, which therefore holds every write the saved state accounts for. No device
+/// event runs between the two because both happen inside this call. The trailer of the round
+/// carries the SHA-256 of the state file, so the target loads only the state written with the
+/// memory it received.
+pub fn create_state_only_snapshot(
+    vmm: &mut Vmm,
+    vm_info: &VmInfo,
+    params: &CreateSnapshotParams,
+    stream: crate::migration::stream::FdStream,
+) -> Result<crate::migration::source::RoundStats, CreateSnapshotError> {
+    use crate::vmm_config::instance_info::VmState as InstanceState;
+
+    if vmm.instance_info.state != InstanceState::Paused {
+        return Err(CreateSnapshotError::MicrovmState(
+            MicrovmStateError::NotAllowed("a StateOnly snapshot needs a paused microVM".into()),
+        ));
+    }
+    vmm.migration_check()?;
+    vmm.migration_session_ready()?;
+
+    let microvm_state = vmm
+        .save_state(vm_info)
+        .map_err(CreateSnapshotError::MicrovmState)?;
+    let mut state_bytes = Vec::new();
+    Snapshot::new(&microvm_state).save(&mut state_bytes)?;
+    let mut snapshot_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&params.snapshot_path)
+        .map_err(|err| CreateSnapshotError::SnapshotBackingFile("open", err))?;
+    snapshot_file
+        .write_all(&state_bytes)
+        .and_then(|()| snapshot_file.flush())
+        .map_err(|err| CreateSnapshotError::SnapshotBackingFile("write", err))?;
+    if params.sync_snapshot_files {
+        snapshot_file
+            .sync_all()
+            .map_err(|err| CreateSnapshotError::SnapshotBackingFile("sync_all", err))?;
+    }
+    let state_digest = crate::migration::stream::sha256(&state_bytes);
+
+    let stats = vmm
+        .migration_prepare_round(false, true, stream)?
+        .run(Some(state_digest))?;
+
+    // As after any snapshot: the queue rings are written without marks.
+    if let Some(kvm_vm) = vmm.vm.as_kvm() {
+        vmm.device_manager
+            .mark_virtio_queue_memory_dirty(kvm_vm.guest_memory());
+    }
+    Ok(stats)
 }
 
 fn snapshot_state_to_file(
@@ -362,6 +426,8 @@ pub enum RestoreFromSnapshotError {
     GuestMemory(#[from] RestoreFromSnapshotGuestMemoryError),
     /// Failed to build microVM from snapshot: {0}
     Build(#[from] BuildMicrovmFromSnapshotError),
+    /// Migration error: {0}
+    Migration(#[from] crate::migration::MigrationError),
 }
 /// Sub-Error type for [`restore_from_snapshot`] to contain either [`GuestMemoryFromFileError`] or
 /// [`GuestMemoryFromUffdError`] within [`RestoreFromSnapshotError`].
@@ -380,8 +446,12 @@ pub fn restore_from_snapshot(
     seccomp_filters: &BpfThreadMap,
     params: &LoadSnapshotParams,
     vm_resources: &mut VmResources,
+    received: Option<ReceivedMemory>,
 ) -> Result<Arc<Mutex<Vmm>>, RestoreFromSnapshotError> {
-    let mut microvm_state = snapshot_state_from_file(&params.snapshot_path)?;
+    let mut microvm_state = match &received {
+        Some(received) => snapshot_state_from_migration(&params.snapshot_path, received)?,
+        None => snapshot_state_from_file(&params.snapshot_path)?,
+    };
     for entry in &params.network_overrides {
         // Only the active transport carries virtio device state, so we look at whichever
         // variant this snapshot was saved with. The MMIO and PCI transports wrap their net
@@ -478,6 +548,15 @@ pub fn restore_from_snapshot(
             vm_resources.machine_config.huge_pages,
         )
         .map_err(RestoreFromSnapshotGuestMemoryError::Uffd)?,
+        MemBackendType::Migration => (
+            guest_memory_from_migration(
+                received.ok_or(crate::migration::MigrationError::Incomplete)?,
+                mem_state,
+                track_dirty_pages,
+                vm_resources.machine_config.huge_pages,
+            )?,
+            None,
+        ),
     };
     builder::build_microvm_from_snapshot(
         instance_info,
@@ -512,6 +591,58 @@ fn snapshot_state_from_file(
     let snapshot = Snapshot::load(&mut snapshot_reader)?;
 
     Ok(snapshot.data)
+}
+
+/// Loads the state written with the FINAL round of a migration: the file's SHA-256 must be the
+/// one the round's trailer carried, so the state matches the memory that was received.
+fn snapshot_state_from_migration(
+    snapshot_path: &Path,
+    received: &ReceivedMemory,
+) -> Result<MicrovmState, RestoreFromSnapshotError> {
+    let bytes = std::fs::read(snapshot_path).map_err(SnapshotStateFromFileError::Open)?;
+    if crate::migration::stream::sha256(&bytes) != received.state_digest {
+        return Err(crate::migration::MigrationError::StateDigest.into());
+    }
+    let snapshot =
+        Snapshot::load(&mut bytes.as_slice()).map_err(SnapshotStateFromFileError::Load)?;
+    Ok(snapshot.data)
+}
+
+/// Guest memory received by a migration, checked against the snapshot's layout.
+fn guest_memory_from_migration(
+    received: ReceivedMemory,
+    mem_state: &GuestMemoryState,
+    track_dirty_pages: bool,
+    huge_pages: HugePageConfig,
+) -> Result<Vec<GuestRegionMmap>, crate::migration::MigrationError> {
+    use crate::migration::MigrationError;
+
+    if huge_pages.is_hugetlbfs() {
+        return Err(MigrationError::Unsupported("hugetlbfs guest memory".into()));
+    }
+    let snapshot_layout: Vec<(u64, u64)> = mem_state
+        .regions
+        .iter()
+        .map(|r| (r.base_address, r.size as u64))
+        .collect();
+    if let Some(r) = mem_state
+        .regions
+        .iter()
+        .find(|r| r.region_type != GuestRegionType::Dram)
+    {
+        return Err(MigrationError::LayoutMismatch(format!(
+            "region at {:#x} is not DRAM",
+            r.base_address
+        )));
+    }
+    if snapshot_layout != received.layout {
+        return Err(MigrationError::LayoutMismatch(format!(
+            "snapshot {snapshot_layout:x?}, received {:x?}",
+            received.layout
+        )));
+    }
+    memory::received(received.regions, track_dirty_pages, huge_pages)
+        .map_err(|err| MigrationError::Memory(err.to_string()))
 }
 
 /// Error type for [`guest_memory_from_file`].

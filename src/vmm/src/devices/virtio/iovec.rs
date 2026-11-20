@@ -14,7 +14,7 @@ use vm_memory::{
 use super::iov_deque::{IovDeque, IovDequeError};
 use super::queue::FIRECRACKER_MAX_QUEUE_SIZE;
 use crate::devices::virtio::queue::DescriptorChain;
-use crate::vstate::memory::GuestMemoryMmap;
+use crate::vstate::memory::{GuestMemoryExtension, GuestMemoryMmap};
 
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
 pub enum IoVecError {
@@ -382,6 +382,20 @@ impl<const L: u16> IoVecBufferMut<L> {
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+
+    /// Marks the guest memory behind every iovec still held in this buffer as dirty.
+    ///
+    /// [`IoVecBufferMut::append_descriptor_chain`] marks a descriptor's memory dirty when the
+    /// chain is parsed, ahead of the device's write, because the guest addresses are lost once
+    /// the chain is reduced to iovecs. A chain that stays in the buffer across events (the
+    /// network device's RX buffers) is written later, possibly after a consumer of the dirty
+    /// bitmap (a migration round) took and cleared that early mark. Calling this after such a
+    /// take restores the mark for the writes still to come.
+    pub fn mark_dirty(&self, mem: &GuestMemoryMmap) {
+        for iov in self.vecs.as_slice() {
+            mem.mark_dirty_host_range(iov.iov_base.cast::<u8>(), iov.iov_len);
+        }
     }
 
     /// Returns a pointer to the memory keeping the `iovec` structs

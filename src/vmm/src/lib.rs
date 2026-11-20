@@ -88,6 +88,8 @@ pub mod dumbo;
 pub mod gdb;
 /// Logger
 pub mod logger;
+/// Pre-copy migration of guest memory.
+pub mod migration;
 /// microVM Metadata Service MMDS
 pub mod mmds;
 /// PCI specific emulation code.
@@ -308,6 +310,8 @@ pub struct Vmm {
     pub vm: Vm,
     // Device manager
     device_manager: DeviceManager,
+    // The source side of a migration in progress.
+    migration_source: migration::source::SourceSession,
 }
 
 impl Vmm {

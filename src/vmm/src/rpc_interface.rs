@@ -8,7 +8,7 @@ use serde_json::Value;
 use utils::time::{ClockType, get_time_us};
 
 use super::builder::build_and_boot_microvm;
-use super::persist::{create_snapshot, restore_from_snapshot};
+use super::persist::{create_snapshot, create_state_only_snapshot, restore_from_snapshot};
 use super::resources::VmResources;
 use super::{Vmm, VmmError};
 use crate::EventManager;
@@ -19,6 +19,13 @@ use crate::devices::virtio::balloon::device::{HintingStatus, StartHintingCmd};
 use crate::devices::virtio::device::VirtioDeviceId;
 use crate::devices::virtio::mem::VirtioMemStatus;
 use crate::logger::{LoggerConfig, info, warn, *};
+use crate::migration::source::{RoundJob, RoundStats};
+use crate::migration::stream::FdStream;
+use crate::migration::target::{MigrationReceiver, ReceiveStats};
+use crate::migration::{
+    MemoryDigest, MigrationError, MigrationInfo, MigrationReceiveRoundParams,
+    MigrationSendRoundParams,
+};
 use crate::mmds::data_store::{self, Mmds, MmdsDatastoreError};
 use crate::persist::{CreateSnapshotError, RestoreFromSnapshotError, VmInfo};
 use crate::resources::VmmConfig;
@@ -43,7 +50,9 @@ use crate::vmm_config::net::{
 };
 use crate::vmm_config::pmem::{PmemConfig, PmemConfigError, PmemDeviceUpdateConfig};
 use crate::vmm_config::serial::SerialConfig;
-use crate::vmm_config::snapshot::{CreateSnapshotParams, LoadSnapshotParams, SnapshotType};
+use crate::vmm_config::snapshot::{
+    CreateSnapshotParams, LoadSnapshotParams, MemBackendType, SnapshotType,
+};
 use crate::vmm_config::vsock::{VsockConfigError, VsockDeviceConfig};
 use crate::vmm_config::{self, RateLimiterUpdate};
 
@@ -153,6 +162,16 @@ pub enum VmmAction {
     UpdateMachineConfiguration(MachineConfigUpdate),
     /// Hot-unplug a device.
     HotUnplugDevice(VirtioDeviceId),
+    /// Get the migration protocol of this VMM.
+    GetMigration,
+    /// Take and reset the dirty set and send a migration round. Allowed while
+    /// the vCPUs run.
+    MigrationSendRound(MigrationSendRoundParams),
+    /// Receive a migration round into guest memory, before the state is loaded.
+    MigrationReceiveRound(MigrationReceiveRoundParams),
+    /// The SHA-256 of all of guest memory: of a paused microVM, or of the memory received
+    /// before the load.
+    GetMigrationMemoryDigest,
 }
 
 /// Wrapper for all errors associated with VMM actions.
@@ -218,6 +237,8 @@ pub enum VmmActionError {
     PciNotEnabled,
     /// PCI manager error: {0}
     PciManager(#[from] PciManagerError),
+    /// Migration error: {0}
+    Migration(#[from] MigrationError),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -245,6 +266,16 @@ pub enum VmmData {
     VirtioMemStatus(VirtioMemStatus),
     /// The status of the virtio-balloon hinting run
     HintingStatus(HintingStatus),
+    /// The migration protocol of this VMM.
+    MigrationInfo(MigrationInfo),
+    /// A migration round whose dirty set is taken, to be copied by the API thread.
+    MigrationRoundJob(Box<RoundJob>),
+    /// What a migration round sent.
+    MigrationRound(RoundStats),
+    /// What a received migration round carried.
+    MigrationReceived(ReceiveStats),
+    /// The SHA-256 of all of guest memory.
+    MigrationMemoryDigest(MemoryDigest),
 }
 
 fn mmds_patch_data(
@@ -293,6 +324,8 @@ pub struct PrebootApiController<'a> {
     // Some PrebootApiRequest errors are irrecoverable and Firecracker
     // should cleanly teardown if they occur.
     fatal_error: Option<BuildMicrovmFromRequestsError>,
+    // Guest memory received by a migration, for a snapshot load with the `Migration` backend.
+    migration_receiver: Option<MigrationReceiver>,
 }
 
 // TODO Remove when `EventManager` implements `std::fmt::Debug`.
@@ -306,6 +339,7 @@ impl fmt::Debug for PrebootApiController<'_> {
             .field("built_vmm", &self.built_vmm)
             .field("boot_path", &self.boot_path)
             .field("fatal_error", &self.fatal_error)
+            .field("migration_receiver", &self.migration_receiver)
             .finish()
     }
 }
@@ -355,6 +389,7 @@ impl<'a> PrebootApiController<'a> {
             built_vmm: None,
             boot_path: false,
             fatal_error: None,
+            migration_receiver: None,
         }
     }
 
@@ -499,8 +534,18 @@ impl<'a> PrebootApiController<'a> {
             UpdateMachineConfiguration(config) => self.update_machine_config(config),
             SetEntropyDevice(config) => self.set_entropy_device(config),
             SetMemoryHotplugDevice(config) => self.set_memory_hotplug_device(config),
+            GetMigration => Ok(VmmData::MigrationInfo(MigrationInfo::default())),
+            MigrationReceiveRound(params) => self.migration_receive_round(params),
+            GetMigrationMemoryDigest => self
+                .migration_receiver
+                .as_ref()
+                .ok_or(MigrationError::NoSession)
+                .and_then(MigrationReceiver::memory_digest)
+                .map(VmmData::MigrationMemoryDigest)
+                .map_err(VmmActionError::Migration),
             // Operations not allowed pre-boot.
             CreateSnapshot(_)
+            | MigrationSendRound(_)
             | FlushMetrics
             | Pause
             | Resume
@@ -519,6 +564,24 @@ impl<'a> PrebootApiController<'a> {
             #[cfg(target_arch = "x86_64")]
             SendCtrlAltDel => Err(VmmActionError::OperationNotSupportedPreBoot),
         }
+    }
+
+    /// Receives one migration round into guest memory created by the FIRST round. Runs before
+    /// any state exists, so no device can write the memory meanwhile.
+    fn migration_receive_round(
+        &mut self,
+        params: MigrationReceiveRoundParams,
+    ) -> Result<VmmData, VmmActionError> {
+        if self.boot_path {
+            return Err(MigrationError::BootConfigured.into());
+        }
+        let stream = params.stream.ok_or(MigrationError::MissingDescriptor)?;
+        let mut input = FdStream::new(stream.0);
+        let stats = self
+            .migration_receiver
+            .get_or_insert_with(MigrationReceiver::default)
+            .receive_round(&mut input)?;
+        Ok(VmmData::MigrationReceived(stats))
     }
 
     fn balloon_config(&mut self) -> Result<VmmData, VmmActionError> {
@@ -652,6 +715,18 @@ impl<'a> PrebootApiController<'a> {
             return Err(err);
         }
 
+        // Guest memory received by a migration, for the `Migration` backend.
+        let received = match load_params.mem_backend.backend_type {
+            MemBackendType::Migration => Some(
+                self.migration_receiver
+                    .as_mut()
+                    .ok_or(MigrationError::NoSession)
+                    .and_then(MigrationReceiver::take_for_load)
+                    .map_err(|err| LoadSnapshotError::RestoreFromSnapshot(err.into()))?,
+            ),
+            _ => None,
+        };
+
         // Restore VM from snapshot
         let vmm = restore_from_snapshot(
             &self.instance_info,
@@ -659,6 +734,7 @@ impl<'a> PrebootApiController<'a> {
             self.seccomp_filters,
             load_params,
             self.vm_resources,
+            received,
         )
         .inspect_err(|_| {
             // If restore fails, we consider the process is too dirty to recover.
@@ -702,7 +778,7 @@ impl RuntimeApiController {
         use self::VmmAction::*;
         match request {
             // Supported operations allowed post-boot.
-            CreateSnapshot(snapshot_create_cfg) => self.create_snapshot(&snapshot_create_cfg),
+            CreateSnapshot(snapshot_create_cfg) => self.create_snapshot(snapshot_create_cfg),
             FlushMetrics => self.flush_metrics(),
             GetBalloonConfig => self
                 .vmm
@@ -844,6 +920,15 @@ impl RuntimeApiController {
                 .update_memory_hotplug_size(cfg.requested_size_mib)
                 .map(|_| VmmData::Empty)
                 .map_err(VmmActionError::MemoryHotplugUpdate),
+            GetMigration => Ok(VmmData::MigrationInfo(MigrationInfo::default())),
+            MigrationSendRound(params) => self.migration_send_round(params),
+            GetMigrationMemoryDigest => self
+                .vmm
+                .lock()
+                .expect("Poisoned lock")
+                .migration_memory_digest()
+                .map(VmmData::MigrationMemoryDigest)
+                .map_err(VmmActionError::Migration),
             // Operations not allowed post-boot.
             ConfigureBootSource(_)
             | ConfigureLogger(_)
@@ -857,6 +942,7 @@ impl RuntimeApiController {
             | SetEntropyDevice(_)
             | SetMemoryHotplugDevice(_)
             | StartMicroVm
+            | MigrationReceiveRound(_)
             | UpdateMachineConfiguration(_) => Err(VmmActionError::OperationNotSupportedPostBoot),
         }
     }
@@ -864,6 +950,21 @@ impl RuntimeApiController {
     /// Creates a new `RuntimeApiController`.
     pub fn new(vmm: Arc<Mutex<Vmm>>) -> Self {
         Self { vmm }
+    }
+
+    /// Takes the dirty set of a migration round on the VMM thread and hands the copy back to
+    /// the API thread (`VmmData::MigrationRoundJob`), so the devices keep running meanwhile.
+    fn migration_send_round(
+        &mut self,
+        params: MigrationSendRoundParams,
+    ) -> Result<VmmData, VmmActionError> {
+        let stream = params.stream.ok_or(MigrationError::MissingDescriptor)?;
+        let job = self
+            .vmm
+            .lock()
+            .expect("Poisoned lock")
+            .migration_prepare_round(params.first, false, FdStream::new(stream.0))?;
+        Ok(VmmData::MigrationRoundJob(Box::new(job)))
     }
 
     /// Pauses the microVM by pausing the vCPUs.
@@ -919,7 +1020,7 @@ impl RuntimeApiController {
 
     fn create_snapshot(
         &mut self,
-        create_params: &CreateSnapshotParams,
+        mut create_params: CreateSnapshotParams,
     ) -> Result<VmmData, VmmActionError> {
         if create_params.snapshot_type == SnapshotType::Diff {
             log_dev_preview_warning("Virtual machine diff snapshots", None);
@@ -929,7 +1030,25 @@ impl RuntimeApiController {
         let vm_info = VmInfo::from(&*locked_vmm);
         let create_start_us = get_time_us(ClockType::Monotonic);
 
-        create_snapshot(&mut locked_vmm, &vm_info, create_params)?;
+        if create_params.snapshot_type == SnapshotType::StateOnly {
+            let stream = create_params
+                .migration_stream
+                .take()
+                .ok_or(MigrationError::MissingDescriptor)?;
+            let stats = create_state_only_snapshot(
+                &mut locked_vmm,
+                &vm_info,
+                &create_params,
+                FdStream::new(stream.0),
+            )?;
+            info!(
+                "'create state-only snapshot' VMM action took {} us.",
+                get_time_us(ClockType::Monotonic) - create_start_us
+            );
+            return Ok(VmmData::MigrationRound(stats));
+        }
+
+        create_snapshot(&mut locked_vmm, &vm_info, &create_params)?;
 
         match create_params.snapshot_type {
             SnapshotType::Full => {
@@ -952,6 +1071,7 @@ impl RuntimeApiController {
                     elapsed_time_us
                 );
             }
+            SnapshotType::StateOnly => unreachable!(),
         }
         Ok(VmmData::Empty)
     }
@@ -1243,6 +1363,7 @@ mod tests {
                 snapshot_path: PathBuf::new(),
                 mem_file_path: PathBuf::new(),
                 sync_snapshot_files: true,
+                migration_stream: None,
             },
         )));
         #[cfg(target_arch = "x86_64")]

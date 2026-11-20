@@ -10,6 +10,7 @@ pub mod parsed_request;
 pub mod request;
 
 use std::fmt::Debug;
+use std::fs::File;
 use std::sync::mpsc;
 
 pub use micro_http::{Body, HttpServer, Request, Response, ServerError, StatusCode, Version};
@@ -20,7 +21,7 @@ use vmm::logger::{
     METRICS, ProcessTimeReporter, debug, error_unrestricted, info_unrestricted,
     update_metric_with_elapsed_time, warn_unrestricted,
 };
-use vmm::rpc_interface::{ApiRequest, ApiResponse, VmmAction};
+use vmm::rpc_interface::{ApiRequest, ApiResponse, VmmAction, VmmActionError, VmmData};
 use vmm::seccomp::BpfProgramRef;
 use vmm::vmm_config::snapshot::SnapshotType;
 use vmm_sys_util::eventfd::EventFd;
@@ -103,11 +104,18 @@ impl ApiServer {
                     continue;
                 }
             };
-            for server_request in request_vec {
+            for mut server_request in request_vec {
                 let request_processing_start_us = get_time_us(ClockType::Monotonic);
+                // Descriptors passed with SCM_RIGHTS on the request.
+                let mut files = Some(std::mem::take(&mut server_request.request.files));
                 // Use `self.handle_request()` as the processing callback.
-                let response = server_request
-                    .process(|request| self.handle_request(request, request_processing_start_us));
+                let response = server_request.process(|request| {
+                    self.handle_request(
+                        request,
+                        files.take().unwrap_or_default(),
+                        request_processing_start_us,
+                    )
+                });
                 if let Err(err) = server.respond(response) {
                     error_unrestricted!("API Server encountered an error on response: {}", err);
                 };
@@ -122,9 +130,14 @@ impl ApiServer {
     pub fn handle_request(
         &mut self,
         request: &Request,
+        files: Vec<File>,
         request_processing_start_us: u64,
     ) -> Response {
-        match ParsedRequest::try_from(request).map(|r| r.into_parts()) {
+        let parsed = ParsedRequest::try_from(request).and_then(|mut parsed| {
+            parsed.attach_files(files)?;
+            Ok(parsed)
+        });
+        match parsed.map(|r| r.into_parts()) {
             Ok((req_action, mut parsing_info)) => {
                 let mut response = match req_action {
                     RequestAction::Sync(vmm_action) => {
@@ -159,6 +172,7 @@ impl ApiServer {
                     &METRICS.latencies_us.diff_create_snapshot,
                     "create diff snapshot",
                 )),
+                SnapshotType::StateOnly => None,
             },
             VmmAction::LoadSnapshot(_) => {
                 Some((&METRICS.latencies_us.load_snapshot, "load snapshot"))
@@ -173,6 +187,15 @@ impl ApiServer {
             .expect("Failed to send VMM message");
         self.to_vmm_fd.write(1).expect("Cannot update send VMM fd");
         let vmm_outcome = *(self.vmm_response_receiver.recv().expect("VMM disconnected"));
+        // A migration round's dirty set was taken on the VMM thread; copy it here, so the VMM
+        // thread keeps serving the devices while the guest memory goes out.
+        let vmm_outcome = match vmm_outcome {
+            Ok(VmmData::MigrationRoundJob(job)) => job
+                .run(None)
+                .map(VmmData::MigrationRound)
+                .map_err(VmmActionError::Migration),
+            other => other,
+        };
         let response = ParsedRequest::convert_to_response(&vmm_outcome);
 
         if vmm_outcome.is_ok()
@@ -278,6 +301,7 @@ mod tests {
                 snapshot_path: PathBuf::new(),
                 mem_file_path: PathBuf::new(),
                 sync_snapshot_files: true,
+                migration_stream: None,
             })),
             start_time_us,
         );
@@ -292,6 +316,7 @@ mod tests {
                 snapshot_path: PathBuf::new(),
                 mem_file_path: PathBuf::new(),
                 sync_snapshot_files: true,
+                migration_stream: None,
             })),
             start_time_us,
         );
@@ -323,7 +348,7 @@ mod tests {
             .unwrap();
         connection.try_read().unwrap();
         let req = connection.pop_parsed_request().unwrap();
-        let response = api_server.handle_request(&req, 0);
+        let response = api_server.handle_request(&req, Vec::new(), 0);
         assert_eq!(response.status(), StatusCode::BadRequest);
 
         // Test a Get Info request.
@@ -335,7 +360,7 @@ mod tests {
         sender.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
         connection.try_read().unwrap();
         let req = connection.pop_parsed_request().unwrap();
-        let response = api_server.handle_request(&req, 0);
+        let response = api_server.handle_request(&req, Vec::new(), 0);
         assert_eq!(response.status(), StatusCode::OK);
 
         // Test erroneous request.
@@ -348,7 +373,7 @@ mod tests {
             .unwrap();
         connection.try_read().unwrap();
         let req = connection.pop_parsed_request().unwrap();
-        let response = api_server.handle_request(&req, 0);
+        let response = api_server.handle_request(&req, Vec::new(), 0);
         assert_eq!(response.status(), StatusCode::BadRequest);
     }
 

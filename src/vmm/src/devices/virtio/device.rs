@@ -257,6 +257,14 @@ pub trait VirtioDevice: AsAny + MutEventSubscriber + Send {
 
     /// Prepare the device for saving its state
     fn prepare_save(&mut self) {}
+
+    /// Marks dirty the guest memory of buffers the device holds and may still write into.
+    ///
+    /// Devices mark guest memory dirty when they parse a write descriptor, ahead of the write.
+    /// A device that keeps parsed buffers across events must re-mark them here, so a consumer
+    /// that took and cleared the dirty bitmap in between (a migration round) sees the later
+    /// writes. Devices that parse and fill a buffer in the same step need nothing.
+    fn mark_pending_write_buffers_dirty(&mut self, _mem: &GuestMemoryMmap) {}
 }
 
 impl fmt::Debug for dyn VirtioDevice {

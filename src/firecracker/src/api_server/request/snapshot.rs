@@ -6,7 +6,7 @@ use vmm::logger::{IncMetric, METRICS};
 use vmm::rpc_interface::VmmAction;
 use vmm::vmm_config::snapshot::{
     CreateSnapshotParams, LoadSnapshotConfig, LoadSnapshotParams, MemBackendConfig, MemBackendType,
-    Vm, VmState,
+    SnapshotType, Vm, VmState,
 };
 
 use super::super::parsed_request::{ParsedRequest, RequestError};
@@ -54,6 +54,20 @@ pub(crate) fn parse_patch_vm_state(body: &Body) -> Result<ParsedRequest, Request
 
 fn parse_put_snapshot_create(body: &Body) -> Result<ParsedRequest, RequestError> {
     let snapshot_config = serde_json::from_slice::<CreateSnapshotParams>(body.raw())?;
+    let has_mem_file = !snapshot_config.mem_file_path.as_os_str().is_empty();
+    match snapshot_config.snapshot_type {
+        SnapshotType::Full | SnapshotType::Diff if !has_mem_file => {
+            return Err(RequestError::SerdeJson(serde_json::Error::custom(
+                "missing field `mem_file_path`",
+            )));
+        }
+        SnapshotType::StateOnly if has_mem_file => {
+            return Err(RequestError::SerdeJson(serde_json::Error::custom(
+                "a StateOnly snapshot writes no memory file: remove `mem_file_path`",
+            )));
+        }
+        _ => {}
+    }
     Ok(ParsedRequest::new_sync(VmmAction::CreateSnapshot(
         snapshot_config,
     )))
@@ -91,7 +105,23 @@ fn parse_put_snapshot_load(body: &Body) -> Result<ParsedRequest, RequestError> {
     // If `mem_file_path` is specified instead of `mem_backend`, we construct the
     // `MemBackendConfig` object from the path specified, with `File` as backend type.
     let mem_backend = match snapshot_config.mem_backend {
-        Some(backend_cfg) => backend_cfg,
+        Some(backend_cfg) => {
+            let has_path = !backend_cfg.backend_path.as_os_str().is_empty();
+            match backend_cfg.backend_type {
+                MemBackendType::File | MemBackendType::Uffd if !has_path => {
+                    return Err(RequestError::SerdeJson(serde_json::Error::custom(
+                        "missing field `backend_path`",
+                    )));
+                }
+                MemBackendType::Migration if has_path => {
+                    return Err(RequestError::SerdeJson(serde_json::Error::custom(
+                        "the Migration backend uses the received memory: remove `backend_path`",
+                    )));
+                }
+                _ => {}
+            }
+            backend_cfg
+        }
         None => {
             MemBackendConfig {
                 // This is safe to unwrap() because we ensure above that one of the two:
@@ -139,8 +169,6 @@ mod tests {
     fn test_parse_put_snapshot() {
         use std::path::PathBuf;
 
-        use vmm::vmm_config::snapshot::SnapshotType;
-
         let body = r#"{
             "snapshot_type": "Diff",
             "snapshot_path": "foo",
@@ -151,6 +179,7 @@ mod tests {
             snapshot_path: PathBuf::from("foo"),
             mem_file_path: PathBuf::from("bar"),
             sync_snapshot_files: true,
+            migration_stream: None,
         };
         assert_eq!(
             vmm_action_from_request(parse_put_snapshot(&Body::new(body), Some("create")).unwrap()),
@@ -168,6 +197,7 @@ mod tests {
             snapshot_path: PathBuf::from("foo"),
             mem_file_path: PathBuf::from("bar"),
             sync_snapshot_files: false,
+            migration_stream: None,
         };
         assert_eq!(
             vmm_action_from_request(parse_put_snapshot(&Body::new(body), Some("create")).unwrap()),
@@ -183,6 +213,7 @@ mod tests {
             snapshot_path: PathBuf::from("foo"),
             mem_file_path: PathBuf::from("bar"),
             sync_snapshot_files: true,
+            migration_stream: None,
         };
         assert_eq!(
             vmm_action_from_request(parse_put_snapshot(&Body::new(body), Some("create")).unwrap()),
@@ -194,6 +225,28 @@ mod tests {
             "mem_file_path": "bar"
         }"#;
         parse_put_snapshot(&Body::new(invalid_body), Some("create")).unwrap_err();
+
+        // StateOnly: no memory file.
+        let body = r#"{"snapshot_type": "StateOnly", "snapshot_path": "foo"}"#;
+        let expected_config = CreateSnapshotParams {
+            snapshot_type: SnapshotType::StateOnly,
+            snapshot_path: PathBuf::from("foo"),
+            mem_file_path: PathBuf::new(),
+            sync_snapshot_files: true,
+            migration_stream: None,
+        };
+        assert_eq!(
+            vmm_action_from_request(parse_put_snapshot(&Body::new(body), Some("create")).unwrap()),
+            VmmAction::CreateSnapshot(expected_config)
+        );
+        let body =
+            r#"{"snapshot_type": "StateOnly", "snapshot_path": "foo", "mem_file_path": "m"}"#;
+        parse_put_snapshot(&Body::new(body), Some("create")).unwrap_err();
+        // Full and Diff still need the memory file.
+        for kind in ["Full", "Diff"] {
+            let body = format!(r#"{{"snapshot_type": "{kind}", "snapshot_path": "foo"}}"#);
+            parse_put_snapshot(&Body::new(body), Some("create")).unwrap_err();
+        }
 
         let body = r#"{
             "snapshot_path": "foo",
@@ -453,6 +506,35 @@ mod tests {
         );
         parse_put_snapshot(&Body::new(body), Some("invalid")).unwrap_err();
         parse_put_snapshot(&Body::new(body), None).unwrap_err();
+    }
+
+    #[test]
+    fn test_parse_put_snapshot_load_migration_backend() {
+        use std::path::PathBuf;
+
+        let body = r#"{
+            "snapshot_path": "vmstate",
+            "mem_backend": {"backend_type": "Migration"},
+            "track_dirty_pages": true,
+
+            "resume_vm": true
+        }"#;
+        match vmm_action_from_request(parse_put_snapshot(&Body::new(body), Some("load")).unwrap()) {
+            VmmAction::LoadSnapshot(params) => {
+                assert_eq!(params.snapshot_path, PathBuf::from("vmstate"));
+                assert_eq!(params.mem_backend.backend_type, MemBackendType::Migration);
+                assert!(params.track_dirty_pages && params.resume_vm);
+            }
+            other => panic!("{other:?}"),
+        }
+        // The Migration backend takes no path; File and Uffd need one.
+        let body = r#"{"snapshot_path": "s", "mem_backend": {"backend_type": "Migration", "backend_path": "m"}}"#;
+        parse_put_snapshot(&Body::new(body), Some("load")).unwrap_err();
+        for kind in ["File", "Uffd"] {
+            let body =
+                format!(r#"{{"snapshot_path": "s", "mem_backend": {{"backend_type": "{kind}"}}}}"#);
+            parse_put_snapshot(&Body::new(body), Some("load")).unwrap_err();
+        }
     }
 
     #[test]

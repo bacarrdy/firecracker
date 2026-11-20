@@ -1109,6 +1109,12 @@ impl VirtioDevice for Net {
         self.rx_buffer.used_bytes = 0;
         self.rx_buffer.used_descriptors = 0;
     }
+
+    /// The RX buffers are parsed (and marked dirty) when the guest makes them available and
+    /// filled when a frame arrives, possibly much later: re-mark the ones still held.
+    fn mark_pending_write_buffers_dirty(&mut self, mem: &GuestMemoryMmap) {
+        self.rx_buffer.iovec.mark_dirty(mem);
+    }
 }
 
 #[cfg(test)]
@@ -1337,6 +1343,57 @@ pub mod tests {
         assert_eq!(config_read, initial_bytes);
         assert_eq!(net.guest_mac.unwrap(), initial_mac);
         assert_eq!(net.metrics.cfg_fails.count(), cfg_fails_before + 2);
+    }
+
+    #[test]
+    fn test_rx_pending_buffers_marked_dirty_again() {
+        use crate::vmm_config::machine_config::HugePageConfig;
+        use crate::vstate::memory::test_utils::into_region_ext;
+        use crate::vstate::memory::{GuestMemoryExtension, anonymous};
+        use vm_memory::bitmap::Bitmap;
+
+        let mem = into_region_ext(
+            anonymous(
+                std::iter::once((GuestAddress(0), 4 * MAX_BUFFER_SIZE)),
+                true,
+                HugePageConfig::None,
+            )
+            .unwrap(),
+        );
+        let mut th = TestHelper::get_default(&mem);
+        th.activate_net();
+        let buf_addr = th.data_addr();
+        let buf_len = MAX_BUFFER_SIZE as u64;
+        th.add_desc_chain(
+            NetQueue::Rx,
+            0,
+            &[(0, MAX_BUFFER_SIZE as u32, VIRTQ_DESC_F_WRITE)],
+        );
+        th.net().parse_rx_descriptors().unwrap();
+        assert_eq!(th.net().rx_buffer.parsed_descriptors.len(), 1);
+
+        let region = mem.iter().next().unwrap();
+        let dirty = |addr: u64| region.bitmap().dirty_at(usize::try_from(addr).unwrap());
+        // Parsing marked the buffer ahead of the write.
+        assert!(dirty(buf_addr));
+
+        // A migration round takes and clears the bitmap; the frame has not arrived yet.
+        mem.reset_dirty();
+        assert!(!dirty(buf_addr));
+        th.net().mark_pending_write_buffers_dirty(&mem);
+        assert!(dirty(buf_addr));
+        assert!(dirty(buf_addr + buf_len - 1));
+
+        // Once the frame is written and the buffer handed back, nothing is held any more.
+        let frame = inject_tap_tx_frame(&th.net(), 1000);
+        th.event_manager.run_with_timeout(100).unwrap();
+        assert_eq!(th.rxq.used.idx.get(), 1);
+        th.rxq
+            .check_used_elem(0, 0, frame.len().try_into().unwrap());
+        assert!(th.net().rx_buffer.parsed_descriptors.is_empty());
+        mem.reset_dirty();
+        th.net().mark_pending_write_buffers_dirty(&mem);
+        assert!(!dirty(buf_addr));
     }
 
     #[test]

@@ -393,6 +393,64 @@ impl GuestRegionMmap {
     }
 }
 
+impl GuestRegionMmap {
+    /// Rebuilds the region over the same mapping, with or without a dirty bitmap (a fresh,
+    /// clean one). The mapping and its content are unchanged.
+    pub fn with_dirty_tracking(self, track_dirty_pages: bool) -> Result<Self, MemoryError> {
+        let GuestRegionMmap { _region, proxy } = self;
+        let size = proxy.size();
+        let mut builder = MmapRegionBuilder::new_with_bitmap(
+            size,
+            track_dirty_pages.then(|| AtomicBitmap::with_len(size)),
+        )
+        .with_mmap_prot(proxy.prot())
+        .with_mmap_flags(proxy.flags());
+        if let Some(file_offset) = proxy.file_offset() {
+            builder = builder.with_file_offset(file_offset.clone());
+        }
+        // SAFETY: the mapping is valid (owned by `_region`), with the same flags and size.
+        unsafe {
+            builder = builder.with_raw_mmap_pointer(_region.mmap_address);
+        }
+        let mmap_region = builder.build().map_err(MemoryError::MmapRegionError)?;
+        assert!(!mmap_region.owned());
+        let guest_base = proxy.start_addr();
+        // The old proxy does not own the mapping: dropping it unmaps nothing.
+        drop(proxy);
+        Ok(GuestRegionMmap {
+            _region,
+            proxy: vm_memory::GuestRegionMmap::new(mmap_region, guest_base)
+                .ok_or(MemoryError::VmMemoryError)?,
+        })
+    }
+}
+
+/// Finishes guest memory received by a migration (private anonymous regions filled before the
+/// load) for the microVM that loads it: dirty tracking, huge page advice as
+/// the load asks, like `anonymous` would have set them at creation.
+pub fn received(
+    regions: Vec<GuestRegionMmap>,
+    track_dirty_pages: bool,
+    huge_pages: HugePageConfig,
+) -> Result<Vec<GuestRegionMmap>, MemoryError> {
+    regions
+        .into_iter()
+        .map(|region| {
+            let region = region.with_dirty_tracking(track_dirty_pages)?;
+            let madvise_flags = huge_pages.madvise_flags();
+            if madvise_flags != libc::MADV_NORMAL {
+                // SAFETY: the region is a valid mapping owned by `region`.
+                let ret =
+                    unsafe { libc::madvise(region.as_ptr().cast(), region.size(), madvise_flags) };
+                if ret != 0 {
+                    return Err(MemoryError::Madvise(io::Error::last_os_error()));
+                }
+            }
+            Ok(region)
+        })
+        .collect()
+}
+
 /// An extension to GuestMemoryRegion that can be split into multiple KVM slots of
 /// the same slot_size, and stores the type of region, and the starting KVM slot number.
 #[derive(Debug)]
@@ -1000,6 +1058,10 @@ where
     /// Mark memory range as dirty
     fn mark_dirty(&self, addr: GuestAddress, len: usize);
 
+    /// Mark the guest memory behind a host virtual address range as dirty. Ranges (or parts of
+    /// ranges) outside guest memory are ignored.
+    fn mark_dirty_host_range(&self, host_addr: *const u8, len: usize);
+
     /// Dumps all contents of GuestMemoryMmap to a writer.
     fn dump<T: WriteVolatile + std::io::Seek>(&self, writer: &mut T) -> Result<(), MemoryError>;
 
@@ -1086,6 +1148,22 @@ impl GuestMemoryExtension for GuestMemoryMmap {
         // ignore invalid ranges using .flatten()
         for slice in self.get_slices(addr, len).flatten() {
             slice.bitmap().mark_dirty(0, slice.len());
+        }
+    }
+
+    fn mark_dirty_host_range(&self, host_addr: *const u8, len: usize) {
+        let start = host_addr as usize;
+        let Some(end) = start.checked_add(len) else {
+            return;
+        };
+        for region in self.iter() {
+            let region_start = region.as_ptr() as usize;
+            let region_end = region_start + u64_to_usize(region.len());
+            let from = start.max(region_start);
+            let to = end.min(region_end);
+            if from < to {
+                region.bitmap().mark_dirty(from - region_start, to - from);
+            }
         }
     }
 
@@ -1211,7 +1289,16 @@ impl GuestMemoryExtension for GuestMemoryMmap {
 
     fn discard_range(&self, addr: GuestAddress, range_len: usize) -> Result<(), GuestMemoryError> {
         self.try_for_each_region_in_range(addr, range_len, |region, start, len| {
-            region.discard_range(start, len)
+            region.discard_range(start, len)?;
+            // A discarded page changes content (it reads as zero, or as the snapshot file's page
+            // after a File-backed restore) without any guest or device write, so neither KVM's
+            // dirty log nor a device marks it. Mark it here, after the discard: whoever copies
+            // dirty pages (a Diff snapshot, a migration round) then sends its new content instead
+            // of keeping the stale copy it made before the discard.
+            region
+                .bitmap()
+                .mark_dirty(u64_to_usize(start.raw_value()), len);
+            Ok(())
         })
     }
 
@@ -1285,6 +1372,41 @@ mod tests {
     use crate::test_utils::single_region_mem;
     use crate::utils::mib_to_bytes;
     use crate::vstate::memory::test_utils::into_region_ext;
+
+    // Loading enables dirty tracking and applies huge page advice to the original mapping.
+    #[test]
+    fn test_received_memory_finished_for_the_load() {
+        let page_size = host_page_size();
+        let regions = anonymous(
+            std::iter::once((GuestAddress(0), 4 * page_size)),
+            false,
+            HugePageConfig::None,
+        )
+        .unwrap();
+        regions[0]
+            .get_slice(MemoryRegionAddress(page_size as u64), 4)
+            .unwrap()
+            .copy_from(&[1u8, 2, 3, 4]);
+        let address = regions[0].as_ptr() as usize;
+        assert!(regions[0].bitmap().is_none());
+
+        let regions = received(regions, true, HugePageConfig::Transparent).unwrap();
+        assert_eq!(regions[0].as_ptr() as usize, address);
+        let mut bytes = [0u8; 4];
+        regions[0]
+            .get_slice(MemoryRegionAddress(page_size as u64), 4)
+            .unwrap()
+            .copy_to(&mut bytes[..]);
+        assert_eq!(bytes, [1, 2, 3, 4]);
+        assert!(regions[0].bitmap().is_some());
+        assert!(!regions[0].bitmap().dirty_at(page_size));
+
+        // And back without tracking: the same mapping, no bitmap.
+        let region = regions.into_iter().next().unwrap();
+        let region = region.with_dirty_tracking(false).unwrap();
+        assert_eq!(region.as_ptr() as usize, address);
+        assert!(region.bitmap().is_none());
+    }
 
     #[test]
     fn test_anonymous() {
@@ -1896,6 +2018,101 @@ mod tests {
                 .unwrap_err(),
             GuestMemoryError::InvalidGuestAddress(_)
         );
+    }
+
+    #[test]
+    fn test_discard_range_marks_dirty() {
+        let page_size: usize = 0x1000;
+
+        // Anonymous memory: a discarded page reads as zero and is marked dirty.
+        let anon = into_region_ext(
+            anonymous(
+                std::iter::once((GuestAddress(0), 4 * page_size)),
+                true,
+                HugePageConfig::None,
+            )
+            .unwrap(),
+        );
+        // File-backed private memory (a restored snapshot): the discard re-maps the range.
+        let mut memory_file = TempFile::new().unwrap().into_file();
+        memory_file.write_all(&vec![2u8; 4 * page_size]).unwrap();
+        let file = into_region_ext(
+            snapshot_file(
+                memory_file,
+                std::iter::once((GuestAddress(0), 4 * page_size)),
+                true,
+                HugePageConfig::None,
+            )
+            .unwrap(),
+        );
+
+        for mem in [anon, file] {
+            mem.write(&vec![1u8; 4 * page_size], GuestAddress(0))
+                .unwrap();
+            // A consumer copied everything and reset the bitmap.
+            mem.reset_dirty();
+            let region = mem.iter().next().unwrap();
+            let dirty = |page: usize| region.bitmap().dirty_at(page * page_size);
+            assert!((0..4).all(|p| !dirty(p)));
+
+            // The guest gives pages 1 and 2 back (balloon inflate / free page reporting).
+            mem.discard_range(GuestAddress(page_size as u64), 2 * page_size)
+                .unwrap();
+
+            assert!(!dirty(0));
+            assert!(dirty(1));
+            assert!(dirty(2));
+            assert!(!dirty(3));
+            let mut page = vec![0xffu8; page_size];
+            mem.read(&mut page, GuestAddress(page_size as u64)).unwrap();
+            assert_eq!(page, vec![0u8; page_size]);
+
+            // A refused discard marks nothing.
+            mem.reset_dirty();
+            mem.discard_range(GuestAddress(0x20), page_size)
+                .unwrap_err();
+            assert!((0..4).all(|p| !dirty(p)));
+        }
+
+        // Without dirty tracking the discard still works.
+        let untracked = single_region_mem(2 * page_size);
+        untracked.discard_range(GuestAddress(0), page_size).unwrap();
+    }
+
+    #[test]
+    fn test_mark_dirty_host_range() {
+        let page_size: usize = 0x1000;
+        let mem = into_region_ext(
+            anonymous(
+                [
+                    (GuestAddress(0), 4 * page_size),
+                    (GuestAddress(0x10_0000), 4 * page_size),
+                ]
+                .into_iter(),
+                true,
+                HugePageConfig::None,
+            )
+            .unwrap(),
+        );
+        let regions: Vec<_> = mem.iter().collect();
+        let dirty = |r: usize, page: usize| regions[r].bitmap().dirty_at(page * page_size);
+
+        // Bytes 0x10..0x1010 of region 1: pages 0 and 1.
+        let host = regions[1].as_ptr().wrapping_add(0x10);
+        mem.mark_dirty_host_range(host, page_size);
+        assert!(dirty(1, 0) && dirty(1, 1) && !dirty(1, 2));
+        assert!((0..4).all(|p| !dirty(0, p)));
+
+        // A range starting before region 0 is clamped to it; an address outside every region
+        // marks nothing.
+        mem.reset_dirty();
+        let before = regions[0].as_ptr().wrapping_sub(page_size);
+        mem.mark_dirty_host_range(before, 2 * page_size);
+        assert!(dirty(0, 0) && !dirty(0, 1));
+        mem.reset_dirty();
+        mem.mark_dirty_host_range(std::ptr::null(), page_size);
+        mem.mark_dirty_host_range(usize::MAX as *const u8, 2);
+        assert!((0..4).all(|p| !dirty(0, p) && !dirty(1, p)));
     }
 
     /// Verifies that `slots_intersecting_range` returns the correct slots for

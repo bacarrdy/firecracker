@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
+use std::fs::File;
 
 use micro_http::{Body, Method, Request, Response, StatusCode, Version};
 use serde::ser::Serialize;
 use serde_json::Value;
 use vmm::devices::virtio::device::VirtioDeviceType;
 use vmm::logger::{Level, error_unrestricted, info_unrestricted, log_enabled};
+use vmm::migration::MigrationFd;
 use vmm::rpc_interface::{VmmAction, VmmActionError, VmmData};
+use vmm::vmm_config::snapshot::SnapshotType;
 
 use super::ApiServer;
 use super::request::actions::parse_put_actions;
@@ -23,6 +26,7 @@ use super::request::machine_configuration::{
     parse_get_machine_config, parse_patch_machine_config, parse_put_machine_config,
 };
 use super::request::metrics::parse_put_metrics;
+use super::request::migration::{parse_get_migration, parse_put_migration};
 use super::request::mmds::{parse_get_mmds, parse_patch_mmds, parse_put_mmds};
 use super::request::net::{parse_patch_net, parse_put_net};
 use super::request::pmem::{parse_patch_pmem, parse_put_pmem};
@@ -90,6 +94,7 @@ impl TryFrom<&Request> for ParsedRequest {
             }
             (Method::Get, "machine-config", None) => parse_get_machine_config(),
             (Method::Get, "mmds", None) => parse_get_mmds(),
+            (Method::Get, "migration", None) => parse_get_migration(path_tokens.next()),
             (Method::Get, "hotplug", None) if path_tokens.next() == Some("memory") => {
                 parse_get_memory_hotplug()
             }
@@ -104,6 +109,7 @@ impl TryFrom<&Request> for ParsedRequest {
             (Method::Put, "serial", Some(body)) => parse_put_serial(body),
             (Method::Put, "machine-config", Some(body)) => parse_put_machine_config(body),
             (Method::Put, "metrics", Some(body)) => parse_put_metrics(body),
+            (Method::Put, "migration", Some(body)) => parse_put_migration(body, path_tokens.next()),
             (Method::Put, "mmds", Some(body)) => parse_put_mmds(body, path_tokens.next()),
             (Method::Put, "network-interfaces", Some(body)) => {
                 parse_put_net(body, path_tokens.next())
@@ -156,6 +162,35 @@ impl ParsedRequest {
 
     pub(crate) fn into_parts(self) -> (RequestAction, ParsingInfo) {
         (self.action, self.parsing_info)
+    }
+
+    /// Hands the descriptors passed with SCM_RIGHTS on the request to an action that takes one
+    /// (the migration rounds). Such an action needs exactly one; any other action drops (closes)
+    /// whatever was passed, as before.
+    pub(crate) fn attach_files(&mut self, mut files: Vec<File>) -> Result<(), RequestError> {
+        let RequestAction::Sync(action) = &mut self.action;
+        let slot = match action.as_mut() {
+            VmmAction::MigrationSendRound(params) => &mut params.stream,
+            VmmAction::MigrationReceiveRound(params) => &mut params.stream,
+            VmmAction::CreateSnapshot(params)
+                if params.snapshot_type == SnapshotType::StateOnly =>
+            {
+                &mut params.migration_stream
+            }
+            _ => return Ok(()),
+        };
+        if files.len() != 1 {
+            return Err(RequestError::Generic(
+                StatusCode::BadRequest,
+                format!(
+                    "this request needs exactly one file descriptor passed with SCM_RIGHTS, got \
+                     {}",
+                    files.len()
+                ),
+            ));
+        }
+        *slot = files.pop().map(MigrationFd);
+        Ok(())
     }
 
     pub(crate) fn parsing_info(&mut self) -> &mut ParsingInfo {
@@ -211,6 +246,15 @@ impl ParsedRequest {
                     &serde_json::json!({ "firecracker_version": version.as_str() }),
                 ),
                 VmmData::FullVmConfig(config) => Self::success_response_with_data(config),
+                VmmData::MigrationInfo(info) => Self::success_response_with_data(info),
+                VmmData::MigrationRound(stats) => Self::success_response_with_data(stats),
+                VmmData::MigrationReceived(stats) => Self::success_response_with_data(stats),
+                VmmData::MigrationMemoryDigest(digest) => Self::success_response_with_data(digest),
+                VmmData::MigrationRoundJob(_) => {
+                    // The API server runs the job before converting the outcome.
+                    error_unrestricted!("A migration round job reached the response.");
+                    Response::new(Version::Http11, StatusCode::InternalServerError)
+                }
             },
             Err(vmm_action_error) => {
                 let mut response = match vmm_action_error {
@@ -354,6 +398,7 @@ pub(crate) fn checked_id(id: &str) -> Result<&str, RequestError> {
 #[cfg(test)]
 pub mod tests {
     use std::io::{Cursor, Write};
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::net::UnixStream;
     use std::str::FromStr;
 
@@ -629,6 +674,19 @@ pub mod tests {
                     &serde_json::json!({ "firecracker_version": version.as_str() }).to_string(),
                     200,
                 ),
+                VmmData::MigrationInfo(info) => {
+                    http_response(&serde_json::to_string(info).unwrap(), 200)
+                }
+                VmmData::MigrationRound(stats) => {
+                    http_response(&serde_json::to_string(stats).unwrap(), 200)
+                }
+                VmmData::MigrationReceived(stats) => {
+                    http_response(&serde_json::to_string(stats).unwrap(), 200)
+                }
+                VmmData::MigrationMemoryDigest(digest) => {
+                    http_response(&serde_json::to_string(digest).unwrap(), 200)
+                }
+                VmmData::MigrationRoundJob(_) => unreachable!(),
             };
             let response = ParsedRequest::convert_to_response(&data);
             response.write_all(&mut buf).unwrap();
@@ -650,6 +708,24 @@ pub mod tests {
         verify_ok_response_with(VmmData::MmdsValue(serde_json::from_str("{}").unwrap()));
         verify_ok_response_with(VmmData::InstanceInformation(InstanceInfo::default()));
         verify_ok_response_with(VmmData::VmmVersion(String::default()));
+        verify_ok_response_with(VmmData::MigrationInfo(Default::default()));
+        verify_ok_response_with(VmmData::MigrationRound(
+            vmm::migration::source::RoundStats {
+                seq: 1,
+                first: false,
+                r#final: false,
+                dirty_pages: 2,
+                records: 2,
+                data_pages: 1,
+                zero_pages: 1,
+                bytes: 4300,
+                duration_us: 7,
+            },
+        ));
+        assert_eq!(
+            serde_json::to_string(&vmm::migration::MigrationInfo::default()).unwrap(),
+            r#"{"protocol":1}"#
+        );
 
         // Error.
         let error = VmmActionError::StartMicrovm(StartMicrovmError::MissingKernelConfig);
@@ -660,6 +736,92 @@ pub mod tests {
 
         let expected_response = http_response(&json, 400);
         assert_eq!(buf.into_inner(), expected_response.as_bytes());
+    }
+
+    // A migration round's descriptor travels with SCM_RIGHTS on the request and reaches the
+    // action; a round without one, or with two, is refused; other requests drop theirs.
+    #[test]
+    fn test_migration_descriptor_attached() {
+        use std::os::fd::AsRawFd;
+
+        use vmm::migration::MigrationSendRoundParams;
+        use vmm_sys_util::sock_ctrl_msg::ScmSocket;
+        use vmm_sys_util::tempfile::TempFile;
+
+        let request = http_request("PUT", "/migration/send-round", Some(r#"{"first": true}"#));
+        let read = |fds: &[i32]| {
+            let (sender, receiver) = UnixStream::pair().unwrap();
+            let mut connection = HttpConnection::new(receiver);
+            if fds.is_empty() {
+                (&sender).write_all(request.as_bytes()).unwrap();
+            } else {
+                sender.send_with_fds(&[request.as_bytes()], fds).unwrap();
+            }
+            connection.try_read().unwrap();
+            let mut req = connection.pop_parsed_request().unwrap();
+            let files = std::mem::take(&mut req.files);
+            let mut parsed = ParsedRequest::try_from(&req).unwrap();
+            parsed.attach_files(files).map(|()| parsed)
+        };
+
+        let file = TempFile::new().unwrap();
+        let fd = file.as_file().as_raw_fd();
+        let parsed = read(&[fd]).unwrap();
+        match vmm_action_from_request(parsed) {
+            VmmAction::MigrationSendRound(MigrationSendRoundParams {
+                first: true,
+                stream: Some(stream),
+            }) => {
+                // The VMM holds its own descriptor of the same file.
+                assert_ne!(stream.0.as_raw_fd(), fd);
+                let a = stream.0.metadata().unwrap();
+                let b = file.as_file().metadata().unwrap();
+                assert_eq!((a.dev(), a.ino()), (b.dev(), b.ino()));
+            }
+            other => panic!("{other:?}"),
+        }
+        read(&[]).unwrap_err();
+        read(&[fd, fd]).unwrap_err();
+
+        // The pause: a StateOnly snapshot takes the descriptor of the FINAL round.
+        let state_only = http_request(
+            "PUT",
+            "/snapshot/create",
+            Some(r#"{"snapshot_type": "StateOnly", "snapshot_path": "vmstate"}"#),
+        );
+        for (fds, ok) in [(&[fd][..], true), (&[][..], false)] {
+            let (sender, receiver) = UnixStream::pair().unwrap();
+            let mut connection = HttpConnection::new(receiver);
+            if fds.is_empty() {
+                (&sender).write_all(state_only.as_bytes()).unwrap();
+            } else {
+                sender.send_with_fds(&[state_only.as_bytes()], fds).unwrap();
+            }
+            connection.try_read().unwrap();
+            let mut req = connection.pop_parsed_request().unwrap();
+            let files = std::mem::take(&mut req.files);
+            let mut parsed = ParsedRequest::try_from(&req).unwrap();
+            assert_eq!(parsed.attach_files(files).is_ok(), ok);
+            if ok {
+                match vmm_action_from_request(parsed) {
+                    VmmAction::CreateSnapshot(params) => assert!(params.migration_stream.is_some()),
+                    other => panic!("{other:?}"),
+                }
+            }
+        }
+
+        // Any other request drops the descriptors it carries.
+        let (sender, receiver) = UnixStream::pair().unwrap();
+        let mut connection = HttpConnection::new(receiver);
+        sender
+            .send_with_fds(&[http_request("GET", "/", None).as_bytes()], &[fd])
+            .unwrap();
+        connection.try_read().unwrap();
+        let mut req = connection.pop_parsed_request().unwrap();
+        let files = std::mem::take(&mut req.files);
+        assert_eq!(files.len(), 1);
+        let mut parsed = ParsedRequest::try_from(&req).unwrap();
+        parsed.attach_files(files).unwrap();
     }
 
     #[test]

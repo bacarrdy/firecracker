@@ -4,6 +4,10 @@
         "filter_action": "allow",
         "filter": [
             {
+                "syscall": "ppoll",
+                "comment": "Used by the final migration round to wait on a non-blocking migration descriptor"
+            },
+            {
                 "syscall": "newfstatat",
                 "comment": "Used when creating snapshots in vmm:persist::snapshot_memory_to_file through std::fs::File::metadata"
             },
@@ -797,6 +801,10 @@
         "default_action": "trap",
         "filter_action": "allow",
         "filter": [
+            {
+                "syscall": "ppoll",
+                "comment": "Used by migration rounds to wait on a non-blocking migration descriptor"
+            },
             {
                 "syscall": "epoll_ctl"
             },

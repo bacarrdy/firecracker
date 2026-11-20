@@ -764,10 +764,14 @@ paths:
 
   /snapshot/create:
     put:
-      summary: Creates a full or diff snapshot. Post-boot only.
+      summary: Creates a full, diff or state-only snapshot. Post-boot only.
       description:
         Creates a snapshot of the microVM state. The microVM should be
-        in the `Paused` state.
+        in the `Paused` state. A `StateOnly` snapshot (pre-copy
+        migration) writes no memory file; the request carries the migration
+        descriptor (SCM_RIGHTS) and the FINAL round of the open migration
+        session is written to it in the same call, its trailer carrying the
+        SHA-256 of the state file.
       operationId: createSnapshot
       parameters:
         - name: body
@@ -777,6 +781,10 @@ paths:
           schema:
             $ref: "#/definitions/SnapshotCreateParams"
       responses:
+        200:
+          description: StateOnly snapshot created, FINAL round written
+          schema:
+            $ref: "#/definitions/MigrationRoundStats"
         204:
           description: Snapshot created
         400:
@@ -808,6 +816,99 @@ paths:
           description: Snapshot loaded
         400:
           description: Snapshot cannot be loaded due to bad input
+          schema:
+            $ref: "#/definitions/Error"
+        default:
+          description: Internal server error
+          schema:
+            $ref: "#/definitions/Error"
+
+  /migration:
+    get:
+      summary: Gets the migration protocol of this VMM.
+      operationId: getMigration
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/MigrationInfo"
+        default:
+          description: Internal server error
+          schema:
+            $ref: "#/definitions/Error"
+
+  /migration/send-round:
+    put:
+      summary: Sends a pre-copy migration round. Post-boot only, also while running.
+      description:
+        Takes and resets the dirty set (KVM dirty log and Firecracker's
+        bitmap) and writes exactly those pages to the descriptor passed with
+        SCM_RIGHTS on this request (one descriptor, a pipe or a connected
+        socket). `first` starts a session and sends every non-zero page.
+        Needs `track_dirty_pages`. Returns when the round's trailer is
+        written.
+      operationId: migrationSendRound
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/MigrationSendRoundParams"
+      responses:
+        200:
+          description: Round written
+          schema:
+            $ref: "#/definitions/MigrationRoundStats"
+        400:
+          description: Round refused
+          schema:
+            $ref: "#/definitions/Error"
+        default:
+          description: Internal server error
+          schema:
+            $ref: "#/definitions/Error"
+
+  /migration/receive-round:
+    put:
+      summary: Receives a pre-copy migration round. Pre-boot only.
+      description:
+        Reads exactly one round from the descriptor passed with SCM_RIGHTS
+        into guest memory created by the FIRST round, before any state is
+        loaded. After the FINAL round, load the state with the `Migration`
+        memory backend. A refused round closes the receiver. Start a new
+        target and a new FIRST round to retry.
+      operationId: migrationReceiveRound
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: "#/definitions/MigrationReceiveRoundParams"
+      responses:
+        200:
+          description: Round received
+          schema:
+            $ref: "#/definitions/MigrationReceiveStats"
+        400:
+          description: Round refused
+          schema:
+            $ref: "#/definitions/Error"
+        default:
+          description: Internal server error
+          schema:
+            $ref: "#/definitions/Error"
+
+  /migration/memory-digest:
+    get:
+      summary: SHA-256 of all guest memory (paused microVM, or received memory before the load).
+      operationId: getMigrationMemoryDigest
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/MigrationMemoryDigest"
+        400:
+          description: Not paused, or nothing received
           schema:
             $ref: "#/definitions/Error"
         default:
@@ -1493,13 +1594,13 @@ definitions:
     type: object
     required:
       - backend_type
-      - backend_path
     properties:
       backend_type:
         type: string
         enum:
           - File
           - Uffd
+          - Migration
       backend_path:
         type: string
         description: Based on 'backend_type' it is either
@@ -1507,6 +1608,9 @@ definitions:
           2) Path to the UDS where a process is listening for a UFFD initialization
           control payload and open file descriptor that it can use to serve this
           process's guest memory page faults
+          Required for File and Uffd; refused for Migration, which loads the
+          memory received by PUT /migration/receive-round (after the FINAL
+          round, once).
 
   Metrics:
     type: object
@@ -1664,12 +1768,12 @@ definitions:
   SnapshotCreateParams:
     type: object
     required:
-      - mem_file_path
       - snapshot_path
     properties:
       mem_file_path:
         type: string
         description: Path to the file that will contain the guest memory.
+          Required for Full and Diff, refused for StateOnly.
       snapshot_path:
         type: string
         description: Path to the file that will contain the microVM state.
@@ -1678,6 +1782,7 @@ definitions:
         enum:
           - Full
           - Diff
+          - StateOnly
         description:
           Type of snapshot to create. It is optional and by default, a full
           snapshot is created.
@@ -1919,6 +2024,82 @@ definitions:
       requested_size_mib:
         type: integer
         description: Requested size for the hotpluggable memory in MiB.
+
+  MigrationInfo:
+    type: object
+    required:
+      - protocol
+    properties:
+      protocol:
+        type: integer
+        description: Migration protocol version (1).
+
+  MigrationSendRoundParams:
+    type: object
+    properties:
+      first:
+        type: boolean
+        default: false
+        description: Start a session; send every non-zero page.
+      fd:
+        type: integer
+        description: Index of the descriptor passed with SCM_RIGHTS; only 0.
+
+  MigrationReceiveRoundParams:
+    type: object
+    properties:
+      fd:
+        type: integer
+        description: Index of the descriptor passed with SCM_RIGHTS; only 0.
+
+  MigrationRoundStats:
+    type: object
+    properties:
+      seq:
+        type: integer
+      first:
+        type: boolean
+      final:
+        type: boolean
+      dirty_pages:
+        type: integer
+        description: Pages in the round's set (FIRST round - every page).
+      records:
+        type: integer
+      data_pages:
+        type: integer
+      zero_pages:
+        type: integer
+      bytes:
+        type: integer
+      duration_us:
+        type: integer
+
+  MigrationReceiveStats:
+    type: object
+    properties:
+      seq:
+        type: integer
+      first:
+        type: boolean
+      final:
+        type: boolean
+      records:
+        type: integer
+      data_pages:
+        type: integer
+      zero_pages:
+        type: integer
+      duration_us:
+        type: integer
+
+  MigrationMemoryDigest:
+    type: object
+    properties:
+      sha256:
+        type: string
+      bytes:
+        type: integer
 
   FirecrackerVersion:
     type: object

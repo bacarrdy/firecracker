@@ -401,6 +401,16 @@ impl DeviceManager {
         });
     }
 
+    /// Re-marks dirty the guest memory of the write buffers that activated devices hold and may
+    /// still write into (see [`VirtioDevice::mark_pending_write_buffers_dirty`]).
+    pub fn mark_virtio_pending_write_buffers_dirty(&self, mem: &GuestMemoryMmap) {
+        self.for_each_virtio_device_mut(|_, device| {
+            if device.is_activated() {
+                device.mark_pending_write_buffers_dirty(mem);
+            }
+        });
+    }
+
     /// Get a VirtIO device of type `virtio_type` with ID `device_id`
     pub fn get_virtio_device(
         &self,

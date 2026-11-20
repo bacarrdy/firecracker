@@ -20,6 +20,9 @@ pub enum SnapshotType {
     /// Full snapshot.
     #[default]
     Full,
+    /// The microVM state only, no guest memory, written in the pause of a migration together
+    /// with the FINAL round to the migration descriptor.
+    StateOnly,
 }
 
 /// Specifies the method through which guest memory will get populated when
@@ -33,6 +36,8 @@ pub enum MemBackendType {
     File,
     /// Guest memory will be served through UFFD by a separate process.
     Uffd,
+    /// Guest memory was received by `PUT /migration/receive-round` before the load; `backend_path` is not used.
+    Migration,
 }
 
 /// Stores the configuration that will be used for creating a snapshot.
@@ -45,12 +50,18 @@ pub struct CreateSnapshotParams {
     pub snapshot_type: SnapshotType,
     /// Path to the file that will contain the microVM state.
     pub snapshot_path: PathBuf,
-    /// Path to the file that will contain the guest memory.
+    /// Path to the file that will contain the guest memory. Required for `Full` and `Diff`,
+    /// refused for `StateOnly`.
+    #[serde(default)]
     pub mem_file_path: PathBuf,
     /// Whether to fsync the snapshot state and guest memory files.
     /// Activated virtio-block devices are always fsync'd, independently of this.
     #[serde(default = "default_sync_snapshot_files")]
     pub sync_snapshot_files: bool,
+    /// `StateOnly`: the migration descriptor the FINAL round is written to, passed with
+    /// SCM_RIGHTS on the request.
+    #[serde(skip)]
+    pub migration_stream: Option<crate::migration::MigrationFd>,
 }
 
 /// Default value for [CreateSnapshotParams::sync_snapshot_files].
@@ -169,7 +180,8 @@ pub struct LoadSnapshotConfig {
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MemBackendConfig {
-    /// Path to the backend used to handle the guest memory.
+    /// Path to the backend used to handle the guest memory. Required for `File` and `Uffd`.
+    #[serde(default)]
     pub backend_path: PathBuf,
     /// Specifies the guest memory backend type.
     pub backend_type: MemBackendType,

@@ -652,6 +652,8 @@ impl KvmVm {
                 self.reset_dirty_bitmap();
                 self.guest_memory().reset_dirty();
             }
+            // A state-only snapshot has no memory file; `create_snapshot` never gets here.
+            SnapshotType::StateOnly => {}
         };
 
         file.flush()
