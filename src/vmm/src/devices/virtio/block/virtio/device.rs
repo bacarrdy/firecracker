@@ -180,7 +180,7 @@ impl DiskProperties {
                 file_engine_type,
                 discard,
             )
-                .map_err(VirtioBlockError::FileEngine)?,
+            .map_err(VirtioBlockError::FileEngine)?,
             nsectors: disk_size >> SECTOR_SHIFT,
             image_id,
             direct_write,
