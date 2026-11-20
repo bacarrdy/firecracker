@@ -26,7 +26,13 @@ use vmm_sys_util::syscall::SyscallReturnCode;
 use crate::io_uring::generated::io_uring_register_op;
 
 // IO_uring operations that we require to be supported by the host kernel.
-const REQUIRED_OPS: [OpCode; 2] = [OpCode::Read, OpCode::Write];
+const REQUIRED_OPS: [OpCode; 5] = [
+    OpCode::Read,
+    OpCode::Write,
+    OpCode::Fsync,
+    OpCode::Readv,
+    OpCode::Writev,
+];
 // Taken from linux/fs/io_uring.c
 const IORING_MAX_FIXED_FILES: usize = 1 << 15;
 
@@ -246,6 +252,17 @@ impl<T: Debug> IoUring<T> {
     /// Return the number of operations currently on the submission queue.
     pub fn pending_sqes(&self) -> Result<u32, IoUringError> {
         self.squeue.pending().map_err(IoUringError::SQueue)
+    }
+
+    /// Operations published to the SQ but not yet accepted by io_uring_enter.
+    pub fn unsubmitted_sqes(&self) -> u32 {
+        self.squeue.unsubmitted()
+    }
+
+    /// Whether another operation can be queued without mutating the ring.
+    pub fn can_push(&self) -> Result<bool, IoUringError> {
+        Ok(self.num_ops < self.cqueue.count()
+            && self.squeue.pending().map_err(IoUringError::SQueue)? < self.squeue.count())
     }
 
     /// A total of the number of ops in the submission and completion queues, as well as the

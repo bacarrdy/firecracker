@@ -144,6 +144,17 @@ impl<Data> Snapshot<Data> {
         }
     }
 
+    /// Constructs a new snapshot written with format `version` (at most `SNAPSHOT_VERSION`).
+    pub fn new_with_version(data: Data, version: Version) -> Self {
+        Self {
+            header: SnapshotHdr {
+                magic: SNAPSHOT_MAGIC_ID,
+                version,
+            },
+            data,
+        }
+    }
+
     /// Gets the version of this snapshot
     pub fn version(&self) -> &Version {
         &self.header.version

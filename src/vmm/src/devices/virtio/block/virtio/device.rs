@@ -15,16 +15,18 @@ use std::os::linux::fs::MetadataExt;
 use std::os::unix::fs::FileTypeExt;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use block_io::FileEngine;
 use serde::{Deserialize, Serialize};
-use vm_memory::ByteValued;
+use utils::time::TimerFd;
+use vm_memory::{ByteValued, Bytes};
 use vmm_sys_util::eventfd::EventFd;
 
 use super::io::async_io;
 use super::request::*;
 use super::{
-    BLOCK_QUEUE_SIZES, MAX_DISCARD_SECTORS, SECTOR_SHIFT, SECTOR_SIZE, VirtioBlockError,
+    BLOCK_QUEUE_SIZES, MAX_DISCARD_SECTORS, SECTOR_SHIFT, SECTOR_SIZE, SEG_MAX, VirtioBlockError,
     io as block_io,
 };
 use crate::devices::virtio::ActivateError;
@@ -33,7 +35,7 @@ use crate::devices::virtio::block::virtio::metrics::{BlockDeviceMetrics, BlockMe
 use crate::devices::virtio::device::{ActiveState, DeviceState, VirtioDevice, VirtioDeviceType};
 use crate::devices::virtio::generated::virtio_blk::{
     VIRTIO_BLK_F_BLK_SIZE, VIRTIO_BLK_F_DISCARD, VIRTIO_BLK_F_FLUSH, VIRTIO_BLK_F_RO,
-    VIRTIO_BLK_F_TOPOLOGY, VIRTIO_BLK_ID_BYTES,
+    VIRTIO_BLK_F_SEG_MAX, VIRTIO_BLK_F_TOPOLOGY, VIRTIO_BLK_ID_BYTES,
 };
 use crate::devices::virtio::generated::virtio_config::VIRTIO_F_VERSION_1;
 use crate::devices::virtio::generated::virtio_ring::VIRTIO_RING_F_EVENT_IDX;
@@ -122,10 +124,11 @@ impl DiskProperties {
         let mut disk_image = Self::open_file(&disk_image_path, is_disk_read_only)?;
         let disk_size = Self::file_size(&disk_image_path, &mut disk_image)?;
 
-        self.image_id = Self::build_disk_image_id(&disk_image);
+        let image_id = Self::build_disk_image_id(&disk_image);
         self.file_engine
             .update_file_path(disk_image)
             .map_err(VirtioBlockError::FileEngine)?;
+        self.image_id = image_id;
         self.nsectors = disk_size >> SECTOR_SHIFT;
         self.file_path = disk_image_path;
 
@@ -403,6 +406,7 @@ pub struct VirtioBlock {
     pub disk: DiskProperties,
     pub rate_limiter: RateLimiter,
     pub is_io_engine_throttled: bool,
+    pub(crate) retry_timer: TimerFd,
     pub metrics: Arc<BlockDeviceMetrics>,
 }
 
@@ -442,10 +446,13 @@ impl VirtioBlock {
             .map(RateLimiter::from)
             .unwrap_or_default();
 
+        // SEG_MAX: a request may carry up to `SEG_MAX` data descriptors, so a guest's large
+        // direct I/O from scattered pages is not split into one request per page.
         let mut avail_features = (1u64 << VIRTIO_F_VERSION_1)
             | (1u64 << VIRTIO_RING_F_EVENT_IDX)
             | (1u64 << VIRTIO_BLK_F_BLK_SIZE)
-            | (1u64 << VIRTIO_BLK_F_TOPOLOGY);
+            | (1u64 << VIRTIO_BLK_F_TOPOLOGY)
+            | (1u64 << VIRTIO_BLK_F_SEG_MAX);
 
         if config.cache_type == CacheType::Writeback {
             avail_features |= 1u64 << VIRTIO_BLK_F_FLUSH;
@@ -460,6 +467,7 @@ impl VirtioBlock {
 
         let mut config_space = ConfigSpace {
             capacity: disk_properties.nsectors.to_le(),
+            seg_max: SEG_MAX.to_le(),
             ..Default::default()
         };
 
@@ -504,6 +512,7 @@ impl VirtioBlock {
             disk: disk_properties,
             rate_limiter,
             is_io_engine_throttled: false,
+            retry_timer: TimerFd::new(),
             metrics: BlockMetricsPerDevice::alloc(config.drive_id),
         })
     }
@@ -554,6 +563,9 @@ impl VirtioBlock {
         // Upon rate limiter event, call the rate limiter handler
         // and restart processing the queue.
         if self.rate_limiter.event_handler().is_ok() {
+            // Retry admission now; process_queue will set the flag again if
+            // the engine still has no capacity.
+            self.is_io_engine_throttled = false;
             self.process_queue(0).unwrap()
         }
     }
@@ -569,29 +581,61 @@ impl VirtioBlock {
         while let Some(head) = queue.pop_or_enable_notification()? {
             self.metrics.remaining_reqs_count.add(queue.len().into());
             let processing_result =
-                match Request::parse(&head, &active_state.mem, self.disk.nsectors) {
+                match Request::parse_with_status(&head, &active_state.mem, self.disk.nsectors) {
                     Ok(request) => {
-                        if request.rate_limit(&mut self.rate_limiter) {
+                        // Admission must precede rate accounting: a request that is put back
+                        // on the queue must not consume tokens, including burst or debt.
+                        if let FileEngine::Async(engine) = &mut self.disk.file_engine {
+                            match engine.can_accept() {
+                                Ok(true) => (),
+                                Ok(false) => {
+                                    queue.undo_pop();
+                                    self.is_io_engine_throttled = true;
+                                    break;
+                                }
+                                Err(err) => {
+                                    error!("Failed to check block engine capacity: {:?}", err);
+                                    self.retry_timer.arm(Duration::from_millis(10), None);
+                                    queue.undo_pop();
+                                    self.is_io_engine_throttled = true;
+                                    break;
+                                }
+                            }
+                        }
+                        let Some(reservation) = request.reserve_budget(&mut self.rate_limiter)
+                        else {
                             // Stop processing the queue and return this descriptor chain to the
                             // avail ring, for later processing.
                             queue.undo_pop();
                             self.metrics.rate_limiter_throttled_events.inc();
                             break;
-                        }
+                        };
 
-                        request.process(
+                        let result = request.process(
                             &mut self.disk,
                             head.index,
                             &active_state.mem,
                             &self.metrics,
                             self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
-                        )
+                        );
+                        if matches!(result, ProcessingResult::Throttled) {
+                            reservation.cancel();
+                        }
+                        result
                     }
-                    Err(err) => {
+                    Err((err, status)) => {
                         error!("Failed to parse available descriptor chain: {:?}", err);
                         self.metrics.execute_fails.inc();
+                        // The guest must not take a refused request for a success: IOERR in its
+                        // status byte when the chain names one (`Request::parse_with_status`).
+                        let num_bytes_to_mem = status.map_or(0, |addr| {
+                            active_state
+                                .mem
+                                .write_obj(u8::try_from(VIRTIO_BLK_S_IOERR).unwrap(), addr)
+                                .map_or(0, |()| 1)
+                        });
                         ProcessingResult::Executed(FinishedRequest {
-                            num_bytes_to_mem: 0,
+                            num_bytes_to_mem,
                             desc_idx: head.index,
                         })
                     }
@@ -632,6 +676,7 @@ impl VirtioBlock {
             && let Err(err) = engine.kick_submission_queue()
         {
             error!("BlockError submitting pending block requests: {:?}", err);
+            self.retry_timer.arm(Duration::from_millis(10), None);
         }
 
         if !used_any {
@@ -641,22 +686,26 @@ impl VirtioBlock {
         Ok(())
     }
 
-    fn process_async_completion_queue(&mut self) {
-        let engine = unwrap_async_file_engine_or_return!(&mut self.disk.file_engine);
+    fn process_async_completion_queue(&mut self) -> Result<(), block_io::BlockIoError> {
+        let FileEngine::Async(engine) = &mut self.disk.file_engine else {
+            return Ok(());
+        };
 
         // This is safe since we checked in the event handler that the device is activated.
         let active_state = self.device_state.active_state().unwrap();
         let queue = &mut self.queues[0];
+        let mut completion_error = None;
 
         loop {
             match engine.pop(&active_state.mem) {
                 Err(error) => {
-                    error!("Failed to read completed io_uring entry: {:?}", error);
+                    completion_error = Some(block_io::BlockIoError::Async(error));
                     break;
                 }
                 Ok(None) => break,
                 Ok(Some(cqe)) => {
                     let res = cqe.result();
+                    let progress = cqe.progress();
                     let user_data = cqe.user_data();
 
                     let (pending, res) = match res {
@@ -668,7 +717,12 @@ impl VirtioBlock {
                             ))),
                         ),
                     };
-                    let finished = pending.finish(&active_state.mem, res, &self.metrics);
+                    let finished = pending.finish_with_progress(
+                        &active_state.mem,
+                        res,
+                        progress,
+                        &self.metrics,
+                    );
                     queue
                         .add_used(finished.desc_idx, finished.num_bytes_to_mem)
                         .unwrap_or_else(|err| {
@@ -690,6 +744,7 @@ impl VirtioBlock {
                     self.metrics.event_fails.inc();
                 });
         }
+        completion_error.map_or(Ok(()), Err)
     }
 
     pub fn process_async_completion_event(&mut self) {
@@ -698,17 +753,41 @@ impl VirtioBlock {
         if let Err(err) = engine.completion_evt().read() {
             error!("Failed to get async completion event: {:?}", err);
         } else {
-            self.process_async_completion_queue();
+            if let Err(err) = self.process_async_completion_queue() {
+                error!("Failed to process block completions: {:?}", err);
+                self.retry_timer.arm(Duration::from_millis(10), None);
+            }
 
-            if self.is_io_engine_throttled {
+            if self.is_io_engine_throttled && !self.rate_limiter.is_blocked() {
                 self.is_io_engine_throttled = false;
                 self.process_queue(0).unwrap()
             }
         }
     }
 
+    pub(crate) fn process_retry_event(&mut self) {
+        self.retry_timer.read();
+        if let FileEngine::Async(engine) = &mut self.disk.file_engine
+            && let Err(err) = engine.kick_submission_queue()
+        {
+            error!("Failed to retry block submission: {:?}", err);
+            self.retry_timer.arm(Duration::from_millis(10), None);
+            return;
+        }
+        if let Err(err) = self.process_async_completion_queue() {
+            error!("Failed to retry block completions: {:?}", err);
+            self.retry_timer.arm(Duration::from_millis(10), None);
+            return;
+        }
+        if self.is_io_engine_throttled && !self.rate_limiter.is_blocked() {
+            self.is_io_engine_throttled = false;
+            self.process_queue(0).unwrap();
+        }
+    }
+
     /// Update the backing file and the config space of the block device.
     pub fn update_disk_image(&mut self, disk_image_path: String) -> Result<(), VirtioBlockError> {
+        self.quiesce().map_err(VirtioBlockError::FileEngine)?;
         self.disk.update(disk_image_path, self.read_only)?;
         self.config_space.capacity = self.disk.nsectors.to_le(); // virtio_block_config_space();
 
@@ -736,22 +815,51 @@ impl VirtioBlock {
         }
     }
 
-    fn drain_and_flush(&mut self, discard: bool) {
-        if let Err(err) = self.disk.file_engine.drain_and_flush(discard) {
-            error!("Failed to drain ops and flush block data: {:?}", err);
+    // A completion may enqueue the next child of the same logical request. Continue
+    // until every accepted child and its parent completion have been consumed.
+    fn quiesce(&mut self) -> Result<(), block_io::BlockIoError> {
+        if !self.is_activated() {
+            return Ok(());
         }
+        loop {
+            let pending = match &self.disk.file_engine {
+                FileEngine::Async(engine) => engine.in_flight(),
+                FileEngine::Sync(_) => 0,
+            };
+            if pending == 0 {
+                break;
+            }
+            if let Err(err) = self.disk.file_engine.drain(false) {
+                self.retry_timer.arm(Duration::from_millis(10), None);
+                return Err(err);
+            }
+            if let Err(err) = self.process_async_completion_queue() {
+                self.retry_timer.arm(Duration::from_millis(10), None);
+                return Err(err);
+            }
+        }
+        // Draining consumed the completion event that would otherwise retry a
+        // request held back by engine pressure. Preserve an independent wakeup
+        // for a hot swap or a subsequently resumed source VM.
+        if self.is_io_engine_throttled {
+            self.is_io_engine_throttled = false;
+            if let Err(err) = self.queue_evts[0].write(1)
+                && err.kind() != std::io::ErrorKind::WouldBlock
+            {
+                error!("Failed to schedule block queue after quiescence: {:?}", err);
+                std::process::abort();
+            }
+        }
+        Ok(())
     }
 
-    /// Prepare device for being snapshotted.
-    pub fn prepare_save(&mut self) {
-        if !self.is_activated() {
-            return;
+    /// Prepare device for being snapshotted. Any failure aborts the snapshot.
+    pub fn prepare_save(&mut self) -> Result<(), block_io::BlockIoError> {
+        self.quiesce()?;
+        if self.is_activated() {
+            self.disk.file_engine.drain_and_flush(false)?;
         }
-
-        self.drain_and_flush(false);
-        if let FileEngine::Async(ref _engine) = self.disk.file_engine {
-            self.process_async_completion_queue();
-        }
+        Ok(())
     }
 }
 
@@ -843,27 +951,28 @@ impl VirtioDevice for VirtioBlock {
     }
 
     fn _reset(&mut self) -> bool {
-        if let Err(err) = self.disk.file_engine.drain(true) {
+        if let Err(err) = self.quiesce() {
             error!("Failed to reset block IO engine: {:?}", err);
             return false;
         }
         self.is_io_engine_throttled = false;
+        self.retry_timer.arm(Duration::ZERO, None);
         true
     }
 }
 
 impl Drop for VirtioBlock {
     fn drop(&mut self) {
-        match self.cache_type {
-            CacheType::Unsafe => {
-                if let Err(err) = self.disk.file_engine.drain(true) {
-                    error!("Failed to drain ops on drop: {:?}", err);
-                }
-            }
-            CacheType::Writeback => {
-                self.drain_and_flush(true);
-            }
-        };
+        if let Err(err) = self.quiesce() {
+            error!("Failed to quiesce block device on drop: {:?}", err);
+            // device_state owns guest memory and is dropped before the engine. Never
+            // release it while the kernel may still access an accepted request.
+            std::process::abort();
+        } else if self.cache_type == CacheType::Writeback
+            && let Err(err) = self.disk.file_engine.drain_and_flush(true)
+        {
+            error!("Failed to flush block data on drop: {:?}", err);
+        }
     }
 }
 
@@ -882,7 +991,7 @@ mod tests {
     use crate::devices::virtio::block::virtio::IO_URING_NUM_ENTRIES;
     use crate::devices::virtio::block::virtio::test_utils::{
         RequestDescriptorChain, default_block, read_blk_req_descriptors, set_queue,
-        set_rate_limiter, simulate_async_completion_event,
+        set_rate_limiter, simulate_async_completion_event, simulate_async_completion_event_once,
         simulate_queue_and_async_completion_events, simulate_queue_event,
     };
     use crate::devices::virtio::queue::{VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
@@ -1007,7 +1116,8 @@ mod tests {
             let features: u64 = (1u64 << VIRTIO_F_VERSION_1)
                 | (1u64 << VIRTIO_RING_F_EVENT_IDX)
                 | (1u64 << VIRTIO_BLK_F_BLK_SIZE)
-                | (1u64 << VIRTIO_BLK_F_TOPOLOGY);
+                | (1u64 << VIRTIO_BLK_F_TOPOLOGY)
+                | (1u64 << VIRTIO_BLK_F_SEG_MAX);
 
             assert_eq!(
                 block.avail_features_by_page(0),
@@ -1152,8 +1262,10 @@ mod tests {
 
             let config = block.config_as_bytes();
             // The block's backing file size is 0x1000, so there are 8 (4096/512) sectors.
+            // seg_max: a request may carry up to SEG_MAX data descriptors.
             let expected_config_space = ConfigSpace {
                 capacity: 8,
+                seg_max: SEG_MAX,
                 ..Default::default()
             };
             assert_eq!(config, expected_config_space.as_slice());
@@ -1208,7 +1320,15 @@ mod tests {
 
             assert_eq!(vq.used.idx.get(), 1);
             assert_eq!(vq.used.ring[0].get().id, 0);
-            assert_eq!(vq.used.ring[0].get().len, 0);
+            // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+            assert_eq!(vq.used.ring[0].get().len, 1);
+            assert_eq!(
+                u32::from(
+                    mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                        .unwrap()
+                ),
+                VIRTIO_BLK_S_IOERR
+            );
         }
     }
 
@@ -1237,13 +1357,17 @@ mod tests {
                 mem.write_obj::<u32>(VIRTIO_BLK_T_IN, request_type_addr)
                     .unwrap();
 
-                simulate_queue_and_async_completion_events(&mut block, true);
-
-                assert_eq!(vq.used.idx.get(), 1);
-
-                let used = vq.used.ring[0].get();
+                // A payload outside guest memory is refused before any I/O; the chain
+                // names its status byte, which gets IOERR (SG-R4: never a silent refusal).
                 let status_addr = GuestAddress(vq.dtable[2].addr.get());
-                assert_eq!(used.len, 1);
+                mem.write_obj::<u8>(0x7f, status_addr).unwrap();
+                check_metric_after_block!(
+                    &block.metrics.execute_fails,
+                    1,
+                    simulate_queue_and_async_completion_events(&mut block, true)
+                );
+                assert_eq!(vq.used.idx.get(), 1);
+                assert_eq!(vq.used.ring[0].get().len, 1);
                 assert_eq!(
                     u32::from(mem.read_obj::<u8>(status_addr).unwrap()),
                     VIRTIO_BLK_S_IOERR
@@ -1262,13 +1386,17 @@ mod tests {
                 mem.write_obj::<u32>(VIRTIO_BLK_T_OUT, request_type_addr)
                     .unwrap();
 
-                simulate_queue_and_async_completion_events(&mut block, true);
-
-                assert_eq!(vq.used.idx.get(), 1);
-
-                let used = vq.used.ring[0].get();
+                // A payload outside guest memory is refused before any I/O; the chain
+                // names its status byte, which gets IOERR (SG-R4: never a silent refusal).
                 let status_addr = GuestAddress(vq.dtable[2].addr.get());
-                assert_eq!(used.len, 1);
+                mem.write_obj::<u8>(0x7f, status_addr).unwrap();
+                check_metric_after_block!(
+                    &block.metrics.execute_fails,
+                    1,
+                    simulate_queue_and_async_completion_events(&mut block, true)
+                );
+                assert_eq!(vq.used.idx.get(), 1);
+                assert_eq!(vq.used.ring[0].get().len, 1);
                 assert_eq!(
                     u32::from(mem.read_obj::<u8>(status_addr).unwrap()),
                     VIRTIO_BLK_S_IOERR
@@ -1304,7 +1432,15 @@ mod tests {
 
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
             }
 
             {
@@ -1324,7 +1460,15 @@ mod tests {
 
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
             }
         }
     }
@@ -1359,6 +1503,97 @@ mod tests {
                 mem.read_obj::<u32>(status_addr).unwrap(),
                 VIRTIO_BLK_S_UNSUPP
             );
+        }
+    }
+
+    // A request with several data descriptors through the queue, on both engines: the write
+    // lands in the file in segment order, the read fills scattered segments, the used length
+    // counts all data plus the status byte.
+    #[test]
+    fn test_multi_segment_read_write() {
+        use std::os::unix::fs::FileExt;
+
+        for engine in [FileEngineType::Sync, FileEngineType::Async] {
+            let mut block = default_block(engine);
+            let mem = default_mem();
+            let interrupt = default_interrupt();
+            let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+            set_queue(&mut block, 0, vq.create_queue());
+            block.activate(mem.clone(), interrupt).unwrap();
+
+            let header = GuestAddress(0x1000);
+            let status = GuestAddress(0x9000);
+            let chain = |out: bool| {
+                let data_flags = VIRTQ_DESC_F_NEXT | if out { 0 } else { VIRTQ_DESC_F_WRITE };
+                vq.dtable[0].set(header.0, 16, VIRTQ_DESC_F_NEXT, 1);
+                vq.dtable[1].set(0x4000, 1024, data_flags, 2);
+                vq.dtable[2].set(0x6200, 512, data_flags, 3);
+                vq.dtable[3].set(0x7000, 512, data_flags, 4);
+                vq.dtable[4].set(status.0, 1, VIRTQ_DESC_F_WRITE, 0);
+                vq.avail.ring[0].set(0);
+                vq.avail.idx.set(1);
+                vq.used.idx.set(0);
+            };
+
+            let data: Vec<u8> = (0..2048u32)
+                .map(|i| u8::try_from(i % 251).unwrap())
+                .collect();
+            mem.write_slice(&data[..1024], GuestAddress(0x4000))
+                .unwrap();
+            mem.write_slice(&data[1024..1536], GuestAddress(0x6200))
+                .unwrap();
+            mem.write_slice(&data[1536..], GuestAddress(0x7000))
+                .unwrap();
+            mem.write_obj(RequestHeader::new(VIRTIO_BLK_T_OUT, 2), header)
+                .unwrap();
+            chain(true);
+            check_metric_after_block!(
+                &block.metrics.write_bytes,
+                2048,
+                simulate_queue_and_async_completion_events(&mut block, true)
+            );
+            assert_eq!(vq.used.idx.get(), 1);
+            assert_eq!(vq.used.ring[0].get().len, 1);
+            assert_eq!(
+                mem.read_obj::<u8>(status).unwrap(),
+                u8::try_from(VIRTIO_BLK_S_OK).unwrap()
+            );
+            let mut on_disk = vec![0u8; 2048];
+            block
+                .disk
+                .file_engine
+                .file()
+                .read_exact_at(&mut on_disk, 2 * 512)
+                .unwrap();
+            assert_eq!(on_disk, data);
+
+            // Read it back into the same scattered segments, cleared first.
+            for (addr, len) in [(0x4000u64, 1024usize), (0x6200, 512), (0x7000, 512)] {
+                mem.write_slice(&vec![0u8; len], GuestAddress(addr))
+                    .unwrap();
+            }
+            mem.write_obj(RequestHeader::new(VIRTIO_BLK_T_IN, 2), header)
+                .unwrap();
+            chain(false);
+            set_queue(&mut block, 0, vq.create_queue());
+            check_metric_after_block!(
+                &block.metrics.read_bytes,
+                2048,
+                simulate_queue_and_async_completion_events(&mut block, true)
+            );
+            assert_eq!(vq.used.ring[0].get().len, 2048 + 1);
+            assert_eq!(
+                mem.read_obj::<u8>(status).unwrap(),
+                u8::try_from(VIRTIO_BLK_S_OK).unwrap()
+            );
+            let mut back = vec![0u8; 2048];
+            mem.read_slice(&mut back[..1024], GuestAddress(0x4000))
+                .unwrap();
+            mem.read_slice(&mut back[1024..1536], GuestAddress(0x6200))
+                .unwrap();
+            mem.read_slice(&mut back[1536..], GuestAddress(0x7000))
+                .unwrap();
+            assert_eq!(back, data);
         }
     }
 
@@ -1432,7 +1667,15 @@ mod tests {
 
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
 
                 // Check that the data wasn't written to the file
                 let mut buf = [0u8; 512];
@@ -1467,8 +1710,10 @@ mod tests {
                 vq.avail.idx.set(1);
                 vq.used.idx.set(0);
 
+                let status_addr = GuestAddress(vq.dtable[2].addr.get());
+                mem.write_obj::<u8>(0x7f, status_addr).unwrap();
                 check_metric_after_block!(
-                    &block.metrics.invalid_reqs_count,
+                    &block.metrics.execute_fails,
                     1,
                     simulate_queue_and_async_completion_events(&mut block, true)
                 );
@@ -1476,11 +1721,21 @@ mod tests {
                 let used_idx = vq.used.idx.get();
                 assert_eq!(used_idx, 1);
 
-                let status_addr = GuestAddress(vq.dtable[2].addr.get());
+                // Refused before any I/O, with IOERR in its status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
                 assert_eq!(
                     u32::from(mem.read_obj::<u8>(status_addr).unwrap()),
                     VIRTIO_BLK_S_IOERR
                 );
+                let mut disk = [0u8; 512];
+                block
+                    .disk
+                    .file_engine
+                    .file()
+                    .seek(SeekFrom::Start(0))
+                    .unwrap();
+                block.disk.file_engine.file().read_exact(&mut disk).unwrap();
+                assert_eq!(disk, [0; 512]);
             }
 
             // Write.
@@ -1524,8 +1779,15 @@ mod tests {
 
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                // The descriptor should have been discarded.
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
 
                 // Check that no data was read.
                 let mut buf = [0u8; 512];
@@ -1590,8 +1852,15 @@ mod tests {
 
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                // The descriptor should have been discarded.
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
 
                 // Check that no data was read.
                 let mut buf = [0u8; 512];
@@ -1713,20 +1982,26 @@ mod tests {
                     .flags
                     .set(VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE);
 
+                let status_addr = GuestAddress(vq.dtable[2].addr.get());
+                mem.write_obj::<u8>(0x7f, status_addr).unwrap();
+                let sentinel = [0xa5; 0x100];
+                mem.write_slice(&sentinel, GuestAddress(0xff00)).unwrap();
                 check_metric_after_block!(
-                    &block.metrics.invalid_reqs_count,
+                    &block.metrics.execute_fails,
                     1,
                     simulate_queue_and_async_completion_events(&mut block, true)
                 );
 
-                let used_idx = vq.used.idx.get();
-                assert_eq!(used_idx, 1);
-
-                let status_addr = GuestAddress(vq.dtable[2].addr.get());
+                // Refused before any I/O, with IOERR in its status byte (SG-R4).
+                assert_eq!(vq.used.idx.get(), 1);
+                assert_eq!(vq.used.ring[0].get().len, 1);
                 assert_eq!(
                     u32::from(mem.read_obj::<u8>(status_addr).unwrap()),
                     VIRTIO_BLK_S_IOERR
                 );
+                let mut data = [0u8; 0x100];
+                mem.read_slice(&mut data, GuestAddress(0xff00)).unwrap();
+                assert_eq!(data, sentinel);
             }
         }
     }
@@ -1838,7 +2113,15 @@ mod tests {
                 simulate_queue_event(&mut block, Some(true));
                 assert_eq!(vq.used.idx.get(), 1);
                 assert_eq!(vq.used.ring[0].get().id, 0);
-                assert_eq!(vq.used.ring[0].get().len, 0);
+                // Refused by the parser: IOERR in the chain's status byte (SG-R4).
+                assert_eq!(vq.used.ring[0].get().len, 1);
+                assert_eq!(
+                    u32::from(
+                        mem.read_obj::<u8>(GuestAddress(vq.dtable[2].addr.get()))
+                            .unwrap()
+                    ),
+                    VIRTIO_BLK_S_IOERR
+                );
             }
         }
     }
@@ -1868,13 +2151,16 @@ mod tests {
 
             let hdr_desc = &vq.dtable[idx as usize];
             hdr_desc.addr.set(hdr_addr.0);
+            hdr_desc
+                .len
+                .set(u32::try_from(std::mem::size_of::<RequestHeader>()).unwrap());
             hdr_desc.flags.set(VIRTQ_DESC_F_NEXT);
             hdr_desc.next.set(idx + 1);
 
             let status_desc = &vq.dtable[idx as usize + 1];
             status_desc.addr.set(status_addr.0);
             status_desc.flags.set(VIRTQ_DESC_F_WRITE);
-            status_desc.len.set(4);
+            status_desc.len.set(1);
             status_addr = status_addr.checked_add(4).unwrap();
 
             vq.avail.ring[i as usize].set(idx);
@@ -1917,7 +2203,7 @@ mod tests {
             add_flush_requests_batch(&mut block, &vq, IO_URING_NUM_ENTRIES);
             simulate_queue_event(&mut block, Some(false));
             assert!(!block.is_io_engine_throttled);
-            simulate_async_completion_event(&mut block, true);
+            simulate_async_completion_event_once(&mut block, true);
             check_flush_requests_batch(IO_URING_NUM_ENTRIES, &vq);
 
             // Run scenario that triggers FullSqError : Add sq_size + 10 flush requests.
@@ -1928,12 +2214,12 @@ mod tests {
             // 1. sq_size requests should be processed processed.
             // 2. is_io_engine_throttled should be set back to false.
             // 3. process_queue() should be called again.
-            simulate_async_completion_event(&mut block, true);
+            simulate_async_completion_event_once(&mut block, true);
             assert!(!block.is_io_engine_throttled);
             check_flush_requests_batch(IO_URING_NUM_ENTRIES, &vq);
             // check that process_queue() was called again resulting in the processing of the
             // remaining 10 ops.
-            simulate_async_completion_event(&mut block, true);
+            simulate_async_completion_event_once(&mut block, true);
             assert!(!block.is_io_engine_throttled);
             check_flush_requests_batch(IO_URING_NUM_ENTRIES + 10, &vq);
         }
@@ -1962,10 +2248,91 @@ mod tests {
             add_flush_requests_batch(&mut block, &vq, 1);
             simulate_queue_event(&mut block, Some(false));
             assert!(block.is_io_engine_throttled);
-            simulate_async_completion_event(&mut block, true);
+            simulate_async_completion_event_once(&mut block, true);
             assert!(!block.is_io_engine_throttled);
             check_flush_requests_batch(IO_URING_NUM_ENTRIES * 2, &vq);
         }
+    }
+
+    #[test]
+    fn test_full_engine_does_not_debit_rate_limiter() {
+        let mut block = default_block(FileEngineType::Async);
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, IO_URING_NUM_ENTRIES * 4);
+        block.queues[0] = vq.create_queue();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        // Exactly 128 requests use the burst; one ordinary token must remain
+        // after the 129th request is returned to the queue for lack of SQ space.
+        block.rate_limiter = RateLimiter::new(0, 0, 0, 1, IO_URING_NUM_ENTRIES.into(), 60_000);
+        add_flush_requests_batch(&mut block, &vq, IO_URING_NUM_ENTRIES + 1);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.is_io_engine_throttled);
+        assert!(block.rate_limiter.consume(1, TokenType::Ops));
+        assert!(!block.rate_limiter.consume(1, TokenType::Ops));
+    }
+
+    #[test]
+    fn test_rate_recovery_clears_stale_engine_throttle() {
+        let mut block = default_block(FileEngineType::Async);
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, IO_URING_NUM_ENTRIES * 4);
+        block.queues[0] = vq.create_queue();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        block.rate_limiter = RateLimiter::new(0, 0, 0, 0, 0, 0);
+        add_flush_requests_batch(&mut block, &vq, IO_URING_NUM_ENTRIES + 1);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.is_io_engine_throttled);
+
+        // Rate-limit while the ring is full, then consume all existing CQEs.
+        block.rate_limiter = RateLimiter::new(0, 0, 0, 10, 0, 1000);
+        assert!(block.rate_limiter.consume(10, TokenType::Ops));
+        assert!(!block.rate_limiter.consume(1, TokenType::Ops));
+        simulate_async_completion_event(&mut block, true);
+        assert!(block.rate_limiter.is_blocked());
+        assert!(block.is_io_engine_throttled);
+        assert_eq!(vq.used.idx.get(), IO_URING_NUM_ENTRIES);
+
+        // The one remaining request completes immediately, with no new CQE.
+        let head = IO_URING_NUM_ENTRIES * 2;
+        let hdr_addr = GuestAddress(vq.dtable[head as usize].addr.get());
+        mem.write_obj::<u32>(u32::MAX, hdr_addr).unwrap();
+        block.process_rate_limiter_event();
+        assert_eq!(vq.used.idx.get(), IO_URING_NUM_ENTRIES + 1);
+        assert!(!block.is_io_engine_throttled);
+
+        // A subsequent guest kick must still process a new request.
+        block.rate_limiter = RateLimiter::new(0, 0, 0, 0, 0, 0);
+        vq.avail.ring[(IO_URING_NUM_ENTRIES + 1) as usize].set(head);
+        vq.avail.idx.set(IO_URING_NUM_ENTRIES + 2);
+        simulate_queue_event(&mut block, None);
+        assert_eq!(vq.used.idx.get(), IO_URING_NUM_ENTRIES + 2);
+    }
+
+    #[test]
+    fn test_hot_swap_retries_request_throttled_before_quiesce() {
+        let mut block = default_block(FileEngineType::Async);
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, IO_URING_NUM_ENTRIES * 4);
+        block.queues[0] = vq.create_queue();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        block.rate_limiter = RateLimiter::new(0, 0, 0, 0, 0, 0);
+        add_flush_requests_batch(&mut block, &vq, IO_URING_NUM_ENTRIES + 1);
+        simulate_queue_event(&mut block, Some(false));
+        assert!(block.is_io_engine_throttled);
+
+        // The queued request completes synchronously after swapping the backing
+        // file, so it cannot rely on a new CQE or a fresh guest kick.
+        let head = IO_URING_NUM_ENTRIES * 2;
+        let hdr_addr = GuestAddress(vq.dtable[head as usize].addr.get());
+        mem.write_obj::<u32>(u32::MAX, hdr_addr).unwrap();
+        let replacement = TempFile::new().unwrap();
+        block
+            .update_disk_image(replacement.as_path().to_str().unwrap().into())
+            .unwrap();
+        assert!(!block.is_io_engine_throttled);
+        assert_eq!(vq.used.idx.get(), IO_URING_NUM_ENTRIES);
+        block.process_queue_event(); // consumes the device-generated wakeup
+        assert_eq!(vq.used.idx.get(), IO_URING_NUM_ENTRIES + 1);
     }
 
     #[test]
@@ -1982,11 +2349,25 @@ mod tests {
             // Add a batch of flush requests.
             add_flush_requests_batch(&mut block, &vq, 5);
             simulate_queue_event(&mut block, None);
-            block.prepare_save();
+            block.prepare_save().unwrap();
 
             // Check that all the pending flush requests were processed during `prepare_save()`.
             check_flush_requests_batch(5, &vq);
         }
+    }
+
+    #[test]
+    fn test_prepare_save_propagates_sync_failure() {
+        let mut block = default_block(FileEngineType::Sync);
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        block.queues[0] = vq.create_queue();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        // fsync on /dev/null fails with EINVAL on Linux. Replacing the test engine's
+        // file isolates the error path without modifying a real backing file.
+        let null = OpenOptions::new().write(true).open("/dev/null").unwrap();
+        block.disk.file_engine.update_file_path(null).unwrap();
+        assert!(block.prepare_save().is_err());
     }
 
     #[test]
@@ -2151,7 +2532,9 @@ mod tests {
             let interrupt = default_interrupt();
             let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
             set_queue(&mut block, 0, vq.create_queue());
-            block.activate(mem, interrupt).unwrap();
+            block.activate(mem.clone(), interrupt).unwrap();
+            add_flush_requests_batch(&mut block, &vq, 5);
+            simulate_queue_event(&mut block, None);
             let f = TempFile::new().unwrap();
             let path = f.as_path();
             let mdata = metadata(path).unwrap();
@@ -2165,6 +2548,7 @@ mod tests {
             block
                 .update_disk_image(String::from(path.to_str().unwrap()))
                 .unwrap();
+            check_flush_requests_batch(5, &vq);
 
             assert_eq!(
                 block.disk.file_engine.file().metadata().unwrap().st_ino(),
@@ -2172,5 +2556,111 @@ mod tests {
             );
             assert_eq!(block.disk.image_id, id.as_slice());
         }
+    }
+
+    // A live `PATCH /drives` (grow or re-open) while multi-segment writes are accepted by the
+    // Async engine: every accepted write must complete on the OLD backing before the swap, with
+    // one OK completion each; nothing may be lost or land on the new backing. Before the
+    // scatter/gather change the ring was replaced with the requests still in it and the guest
+    // waited for their completions forever (fc1 proof 2026-11-19, case g).
+    #[test]
+    fn test_hot_swap_completes_accepted_multi_segment_writes_on_old_backing() {
+        use std::os::unix::fs::FileExt;
+
+        const REQUESTS: u16 = 4;
+        let old = TempFile::new().unwrap();
+        old.as_file().set_len(0x10000).unwrap();
+        let mut block = crate::devices::virtio::block::virtio::test_utils::default_block_with_path(
+            old.as_path().to_str().unwrap().to_string(),
+            FileEngineType::Async,
+        );
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 32);
+        set_queue(&mut block, 0, vq.create_queue());
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+
+        let segments = |i: u64| {
+            [
+                (0x4000 + i * 0x1000, 1024u32),
+                (0x4600 + i * 0x1000, 512),
+                (0x4c00 + i * 0x1000, 512),
+            ]
+        };
+        let payload = |i: u16| -> Vec<u8> {
+            (0..2048u32)
+                .map(|b| u8::try_from((b + u32::from(i) * 7) % 251).unwrap())
+                .collect()
+        };
+        for i in 0..REQUESTS {
+            let i64 = u64::from(i);
+            let head = i * 5;
+            let header = GuestAddress(0x1000 + i64 * 0x20);
+            mem.write_obj(RequestHeader::new(VIRTIO_BLK_T_OUT, i64 * 4), header)
+                .unwrap();
+            vq.dtable[usize::from(head)].set(header.0, 16, VIRTQ_DESC_F_NEXT, head + 1);
+            let data = payload(i);
+            let mut at = 0usize;
+            for (s, (addr, len)) in segments(i64).into_iter().enumerate() {
+                let len_usize = usize::try_from(len).unwrap();
+                mem.write_slice(&data[at..at + len_usize], GuestAddress(addr))
+                    .unwrap();
+                at += len_usize;
+                let idx = head + 1 + u16::try_from(s).unwrap();
+                vq.dtable[usize::from(idx)].set(addr, len, VIRTQ_DESC_F_NEXT, idx + 1);
+            }
+            let status = GuestAddress(0xa000 + i64 * 0x10);
+            mem.write_obj::<u8>(0xff, status).unwrap();
+            vq.dtable[usize::from(head + 4)].set(status.0, 1, VIRTQ_DESC_F_WRITE, 0);
+            vq.avail.ring[usize::from(i)].set(head);
+        }
+        vq.avail.idx.set(REQUESTS);
+        vq.used.idx.set(0);
+
+        // Accept the writes; do not consume their completions.
+        simulate_queue_event(&mut block, None);
+        let FileEngine::Async(engine) = &block.disk.file_engine else {
+            unreachable!()
+        };
+        assert_eq!(engine.in_flight(), u32::from(REQUESTS));
+        assert_eq!(vq.used.idx.get(), 0);
+
+        let new = TempFile::new().unwrap();
+        new.as_file().set_len(0x20000).unwrap();
+        block
+            .update_disk_image(new.as_path().to_str().unwrap().to_string())
+            .unwrap();
+
+        // Every accepted request completed once, OK, before the swap.
+        assert_eq!(vq.used.idx.get(), REQUESTS);
+        let mut heads: Vec<u32> = (0..usize::from(REQUESTS))
+            .map(|n| vq.used.ring[n].get().id)
+            .collect();
+        heads.sort_unstable();
+        assert_eq!(heads, vec![0, 5, 10, 15]);
+        for n in 0..usize::from(REQUESTS) {
+            assert_eq!(vq.used.ring[n].get().len, 1);
+        }
+        for i in 0..u64::from(REQUESTS) {
+            assert_eq!(
+                mem.read_obj::<u8>(GuestAddress(0xa000 + i * 0x10)).unwrap(),
+                u8::try_from(VIRTIO_BLK_S_OK).unwrap()
+            );
+        }
+        // The data is on the old backing, the new one is untouched, the device uses the new one.
+        for i in 0..REQUESTS {
+            let mut on_disk = vec![0u8; 2048];
+            old.as_file()
+                .read_exact_at(&mut on_disk, u64::from(i) * 4 * 512)
+                .unwrap();
+            assert_eq!(on_disk, payload(i));
+        }
+        let mut fresh = vec![0u8; 0x20000];
+        new.as_file().read_exact_at(&mut fresh, 0).unwrap();
+        assert!(fresh.iter().all(|b| *b == 0));
+        assert_eq!(block.disk.nsectors, 0x20000 / 512);
+        let FileEngine::Async(engine) = &block.disk.file_engine else {
+            unreachable!()
+        };
+        assert_eq!(engine.in_flight(), 0);
     }
 }

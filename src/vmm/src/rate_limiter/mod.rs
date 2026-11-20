@@ -300,6 +300,27 @@ pub struct RateLimiter {
     timer_active: bool,
 }
 
+/// A debit for an operation admitted to the block engine. Dropping the reservation
+/// commits the debit; a caller returning the request to the queue cancels it.
+pub(crate) struct BudgetReservation<'a> {
+    limiter: &'a mut RateLimiter,
+    previous_ops: Option<TokenBucket>,
+    previous_bandwidth: Option<TokenBucket>,
+}
+
+impl BudgetReservation<'_> {
+    pub(crate) fn cancel(self) {
+        self.limiter.ops = self.previous_ops;
+        self.limiter.bandwidth = self.previous_bandwidth;
+        // A successful reservation started with an idle timer. Any debt timer now
+        // armed belongs exclusively to this unaccepted operation.
+        if self.limiter.timer_active {
+            self.limiter.timer_fd.arm(Duration::ZERO, None);
+            self.limiter.timer_active = false;
+        }
+    }
+}
+
 impl PartialEq for RateLimiter {
     fn eq(&self, other: &RateLimiter) -> bool {
         self.bandwidth == other.bandwidth && self.ops == other.ops
@@ -419,6 +440,33 @@ impl RateLimiter {
             // consume() will always succeed.
             true
         }
+    }
+
+    /// Tentatively charge one block request. Preserve the individual burst and
+    /// regular budgets (including their refill timestamps) if the request is retried.
+    pub(crate) fn reserve(
+        &mut self,
+        ops: u64,
+        bytes: Option<u64>,
+    ) -> Option<BudgetReservation<'_>> {
+        if self.timer_active {
+            return None;
+        }
+        let previous_ops = self.ops.clone();
+        let previous_bandwidth = self.bandwidth.clone();
+        if !self.consume(ops, TokenType::Ops)
+            || bytes.is_some_and(|n| !self.consume(n, TokenType::Bytes))
+        {
+            self.ops = previous_ops;
+            self.bandwidth = previous_bandwidth;
+            // Keep the retry timer for an actual limiter rejection.
+            return None;
+        }
+        Some(BudgetReservation {
+            limiter: self,
+            previous_ops,
+            previous_bandwidth,
+        })
     }
 
     /// Adds tokens of `token_type` to their respective bucket.
@@ -922,6 +970,22 @@ pub(crate) mod tests {
         assert!(*tb.get_last_update() >= before);
         let after = Instant::now();
         assert!(*tb.get_last_update() <= after);
+    }
+
+    #[test]
+    fn test_cancel_block_reservation_restores_burst_and_debt() {
+        let mut limiter = RateLimiter::new(4096, 1024, 60_000, 100, 2, 60_000);
+        limiter.reserve(1, Some(512)).unwrap();
+        limiter.reserve(1, Some(8192)).unwrap().cancel();
+        assert!(!limiter.is_blocked());
+        let bytes = limiter.bandwidth().unwrap();
+        let ops = limiter.ops().unwrap();
+        assert_eq!((bytes.one_time_burst(), bytes.budget()), (512, 4096));
+        assert_eq!((ops.one_time_burst(), ops.budget()), (1, 100));
+        limiter.reserve(1, Some(8192)).unwrap();
+        assert!(limiter.is_blocked());
+        assert_eq!(limiter.bandwidth().unwrap().budget(), 0);
+        assert_eq!(limiter.ops().unwrap().one_time_burst(), 0);
     }
 
     #[test]

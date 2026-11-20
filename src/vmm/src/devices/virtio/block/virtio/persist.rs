@@ -10,11 +10,10 @@ use vmm_sys_util::eventfd::EventFd;
 use super::device::DiskProperties;
 use super::*;
 use crate::devices::virtio::block::persist::BlockConstructorArgs;
-use crate::devices::virtio::block::virtio::device::FileEngineType;
-use crate::devices::virtio::block::virtio::device::VirtioBlkTopology;
+use crate::devices::virtio::block::virtio::device::{FileEngineType, VirtioBlkTopology};
 use crate::devices::virtio::block::virtio::metrics::BlockMetricsPerDevice;
 use crate::devices::virtio::device::{DeviceState, VirtioDeviceType};
-use crate::devices::virtio::generated::virtio_blk::VIRTIO_BLK_F_RO;
+use crate::devices::virtio::generated::virtio_blk::{VIRTIO_BLK_F_RO, VIRTIO_BLK_F_SEG_MAX};
 use crate::devices::virtio::persist::VirtioDeviceState;
 use crate::rate_limiter::RateLimiter;
 use crate::rate_limiter::persist::RateLimiterState;
@@ -117,8 +116,17 @@ impl Persist<'_> for VirtioBlock {
         let avail_features = state.virtio_state.avail_features;
         let acked_features = state.virtio_state.acked_features;
 
+        // The features are the saved ones, never recomputed: a device saved before
+        // VIRTIO_BLK_F_SEG_MAX existed keeps offering (and its guest keeps using) one data
+        // descriptor per request, and seg_max stays 0 in its config space.
+        let seg_max = if avail_features & (1u64 << VIRTIO_BLK_F_SEG_MAX) != 0 {
+            SEG_MAX
+        } else {
+            0
+        };
         let config_space = ConfigSpace {
             capacity: disk_properties.nsectors.to_le(),
+            seg_max: seg_max.to_le(),
             blk_size: state.blk_size,
             topology: state.topology,
             discard_sector_alignment: state.discard_sector_alignment,
@@ -144,6 +152,7 @@ impl Persist<'_> for VirtioBlock {
             disk: disk_properties,
             rate_limiter,
             is_io_engine_throttled: false,
+            retry_timer: utils::time::TimerFd::new(),
             metrics: BlockMetricsPerDevice::alloc(state.id.clone()),
         })
     }
@@ -244,5 +253,53 @@ mod tests {
 
         // Test that block specific fields are the same.
         assert_eq!(restored_block.disk.file_path, block.disk.file_path);
+    }
+
+    // A server that started before VIRTIO_BLK_F_SEG_MAX: its saved state has no SEG_MAX in the
+    // offered features, so the restored device offers none and its config space says seg_max 0;
+    // the features the guest acked are restored as they were. A new device keeps SEG_MAX.
+    #[test]
+    fn test_restore_keeps_negotiated_segment_limit() {
+        let f = TempFile::new().unwrap();
+        f.as_file().set_len(0x1000).unwrap();
+        let config = || VirtioBlockConfig {
+            drive_id: "seg".to_string(),
+            path_on_host: f.as_path().to_str().unwrap().to_string(),
+            is_root_device: false,
+            partuuid: None,
+            is_read_only: false,
+            discard: false,
+            cache_type: CacheType::Unsafe,
+            rate_limiter: None,
+            file_engine_type: FileEngineType::default(),
+            blk_size: None,
+            topology: None,
+        };
+        let seg_bit = 1u64 << VIRTIO_BLK_F_SEG_MAX;
+        let restore = |state: &VirtioBlockState| {
+            let bytes = bitcode::serialize(state).unwrap();
+            VirtioBlock::restore(
+                BlockConstructorArgs { mem: default_mem() },
+                &bitcode::deserialize(&bytes).unwrap(),
+            )
+            .unwrap()
+        };
+
+        // New device, guest negotiated SEG_MAX.
+        let mut block = VirtioBlock::new(config()).unwrap();
+        assert_ne!(block.avail_features() & seg_bit, 0);
+        block.acked_features = block.avail_features();
+        let restored = restore(&block.save());
+        assert_eq!(restored.acked_features() & seg_bit, seg_bit);
+        assert_eq!(u32::from_le(restored.config_space.seg_max), SEG_MAX);
+
+        // State saved by the previous build: SEG_MAX neither offered nor acked.
+        let mut old = block.save();
+        old.virtio_state.avail_features &= !seg_bit;
+        old.virtio_state.acked_features &= !seg_bit;
+        let restored = restore(&old);
+        assert_eq!(restored.avail_features() & seg_bit, 0);
+        assert_eq!(restored.acked_features() & seg_bit, 0);
+        assert_eq!(restored.config_space.seg_max, 0);
     }
 }

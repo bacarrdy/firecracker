@@ -107,7 +107,7 @@ impl CompletionQueue {
             #[allow(clippy::cast_possible_truncation)]
             let index = cqe.user_data as usize;
             match slab.try_remove(index) {
-                Some(user_data) => Ok(Some(Cqe::new(res, user_data))),
+                Some(user_data) => Ok(Some(Cqe::new(i64::from(res), user_data))),
                 None => Err(CQueueError::SlabRemoveFailed),
             }
         } else {

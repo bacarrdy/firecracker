@@ -27,11 +27,18 @@ pub const SECTOR_SIZE: u32 = (0x01_u32) << SECTOR_SHIFT;
 /// Keep this bounded so guest fstrim is split into predictable chunks instead
 /// of letting one large discard ioctl block the VMM thread for too long.
 pub const MAX_DISCARD_SECTORS: u32 = (128_u32 << 20) / SECTOR_SIZE;
+/// Data descriptors per request the device advertises with `VIRTIO_BLK_F_SEG_MAX`.
+/// This is part of the 12.1 snapshot contract; changing it requires a new
+/// serialized contract and compatibility handling for existing snapshots.
+///
+/// A request occupies one header, up to 32 data descriptors and one status descriptor
+/// on the 256-entry ring.
+pub const SEG_MAX: u32 = 32;
 /// The number of queues of block device.
 pub const BLOCK_NUM_QUEUES: usize = 1;
 pub const BLOCK_QUEUE_SIZES: [u16; BLOCK_NUM_QUEUES] = [FIRECRACKER_MAX_QUEUE_SIZE];
-// The virtio queue can hold up to 256 descriptors, but 1 request spreads across 2-3 descriptors.
-// So we can use 128 IO_URING entries without ever triggering a FullSq Error.
+// A request spreads across N + 2 descriptors (N <= SEG_MAX), but it is admitted as ONE initial
+// SQE, so 128 IO_URING entries never trigger a FullSq error from the segment count.
 /// Maximum number of io uring entries we allow in the queue.
 pub const IO_URING_NUM_ENTRIES: u16 = 128;
 
@@ -60,6 +67,8 @@ pub enum VirtioBlockError {
     UnexpectedReadOnlyDescriptor,
     /// Guest gave us a write only descriptor that protocol says to read from.
     UnexpectedWriteOnlyDescriptor,
+    /// Guest gave us several data descriptors for a request that takes one.
+    UnexpectedDataDescriptors,
     /// Error coming from the IO engine: {0}
     FileEngine(io::BlockIoError),
     /// Error manipulating the backing file: {0} {1}

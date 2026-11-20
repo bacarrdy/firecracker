@@ -180,6 +180,14 @@ impl SubmissionQueue {
         Ok((sqe_ring, sqes))
     }
 
+    pub(crate) fn count(&self) -> u32 {
+        self.count
+    }
+
+    pub(crate) fn unsubmitted(&self) -> u32 {
+        self.to_submit
+    }
+
     pub(crate) fn pending(&self) -> Result<u32, SQueueError> {
         let ring_slice = self.ring.as_volatile_slice();
         // get the sqe head

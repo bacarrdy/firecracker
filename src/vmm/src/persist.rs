@@ -25,10 +25,10 @@ use crate::cpu_config::templates::StaticCpuTemplate;
 use crate::cpu_config::x86_64::cpuid::CpuidTrait;
 #[cfg(target_arch = "x86_64")]
 use crate::cpu_config::x86_64::cpuid::common::get_vendor_id_from_host;
-use crate::device_manager::{DevicePersistError, DevicesState};
 // Re-exported so external crates inspecting a `MicrovmState` snapshot can match on the
 // serialised virtio transport variant.
 pub use crate::device_manager::VirtioDevicesState;
+use crate::device_manager::{DevicePersistError, DevicesState};
 use crate::logger::{info, warn};
 use crate::resources::VmResources;
 use crate::seccomp::BpfThreadMap;
@@ -132,6 +132,8 @@ pub struct GuestRegionUffdMapping {
 pub enum MicrovmStateError {
     /// Operation not allowed: {0}
     NotAllowed(String),
+    /// Cannot prepare block device for snapshot: {0}
+    PrepareBlock(String),
     /// Cannot restore devices: {0}
     RestoreDevices(#[from] DevicePersistError),
     /// Cannot save Vcpu state: {0}
@@ -162,8 +164,46 @@ pub enum CreateSnapshotError {
     SnapshotBackingFile(&'static str, io::Error),
 }
 
-/// Snapshot version
-pub const SNAPSHOT_VERSION: Version = Version::new(12, 0, 0);
+/// Snapshot version: the newest format this build reads and writes.
+///
+/// 12.1 is 12.0 plus one meaning: a virtio block device which offers
+/// `VIRTIO_BLK_F_SEG_MAX` (several data descriptors per request). The state layout is the same.
+/// A snapshot is written as 12.1 only when such a device is in it (see
+/// [`snapshot_version_for`]), so a VMM that knows only 12.0 (one data descriptor per request)
+/// refuses exactly the snapshots it would misread, and still loads every other one.
+pub const SNAPSHOT_VERSION: Version = Version::new(12, 1, 0);
+
+/// The format of a snapshot without a multi-segment block device: readable by 12.0 VMMs.
+pub const SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK: Version = Version::new(12, 0, 0);
+
+/// The format version to write `state` with: 12.1 if a virtio block device offers
+/// `VIRTIO_BLK_F_SEG_MAX`, 12.0 otherwise.
+pub fn snapshot_version_for(state: &MicrovmState) -> Version {
+    use crate::devices::virtio::block::persist::BlockState;
+    use crate::devices::virtio::generated::virtio_blk::VIRTIO_BLK_F_SEG_MAX;
+
+    let multi_segment = |block: &BlockState| match block {
+        BlockState::Virtio(block) => {
+            block.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_SEG_MAX) != 0
+        }
+        BlockState::VhostUser(_) => false,
+    };
+    let any = match &state.device_states.virtio_state {
+        VirtioDevicesState::Mmio(mmio) => mmio
+            .block_devices
+            .iter()
+            .any(|d| multi_segment(&d.device_state)),
+        VirtioDevicesState::Pci(pci) => pci
+            .block_devices
+            .iter()
+            .any(|d| multi_segment(&d.device_state)),
+    };
+    if any {
+        SNAPSHOT_VERSION
+    } else {
+        SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK
+    }
+}
 
 /// Creates a Microvm snapshot.
 pub fn create_snapshot(
@@ -214,7 +254,7 @@ fn snapshot_state_to_file(
         .open(snapshot_path)
         .map_err(|err| SnapshotBackingFile("open", err))?;
 
-    let snapshot = Snapshot::new(microvm_state);
+    let snapshot = Snapshot::new_with_version(microvm_state, snapshot_version_for(microvm_state));
     snapshot.save(&mut snapshot_file)?;
     snapshot_file
         .flush()
@@ -742,6 +782,75 @@ mod tests {
         insert_vmclock_device(&mut vmm);
 
         vmm
+    }
+
+    // A snapshot is written as 12.1 when a block device offers SEG_MAX, so a
+    // 12.0 VMM (one data descriptor per request) refuses exactly those and loads the others.
+    #[test]
+    fn test_snapshot_version_follows_block_segments() {
+        use crate::devices::virtio::block::persist::BlockState;
+        use crate::devices::virtio::generated::virtio_blk::VIRTIO_BLK_F_SEG_MAX;
+        use crate::snapshot::Snapshot;
+
+        let mut vmm = default_vmm();
+        let mut event_manager = EventManager::new().unwrap();
+        let mut cmdline = default_kernel_cmdline();
+        insert_block_devices(
+            &mut vmm,
+            &mut cmdline,
+            &mut event_manager,
+            vec![CustomBlockConfig::new(
+                "root".into(),
+                true,
+                None,
+                true,
+                CacheType::Unsafe,
+            )],
+        );
+        let state = vmm.save_state(&VmInfo::default()).unwrap();
+        // An unbooted device may negotiate the offered bit after restore.
+        assert_eq!(snapshot_version_for(&state), SNAPSHOT_VERSION);
+
+        let mut state = state;
+        let VirtioDevicesState::Mmio(mmio) = &mut state.device_states.virtio_state else {
+            panic!("expected MMIO devices");
+        };
+        let BlockState::Virtio(block) = &mut mmio.block_devices[0].device_state else {
+            panic!("expected a virtio block device");
+        };
+        block.virtio_state.avail_features &= !(1u64 << VIRTIO_BLK_F_SEG_MAX);
+        block.virtio_state.acked_features &= !(1u64 << VIRTIO_BLK_F_SEG_MAX);
+        assert_eq!(
+            snapshot_version_for(&state),
+            SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK
+        );
+        let VirtioDevicesState::Mmio(mmio) = &mut state.device_states.virtio_state else {
+            unreachable!()
+        };
+        let BlockState::Virtio(block) = &mut mmio.block_devices[0].device_state else {
+            unreachable!()
+        };
+        block.virtio_state.avail_features |= 1u64 << VIRTIO_BLK_F_SEG_MAX;
+        assert_eq!(snapshot_version_for(&state), SNAPSHOT_VERSION);
+
+        // What a 12.0 reader decides on each: the same check as `Snapshot::load`.
+        let old_minor = SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK.minor;
+        let old_reader_accepts = |v: &Version| {
+            v.major == SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK.major
+                && v.minor.cmp(&old_minor).is_le()
+        };
+        assert!(!old_reader_accepts(&snapshot_version_for(&state)));
+        assert!(old_reader_accepts(&SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK));
+
+        // This build loads both.
+        for version in [SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK, SNAPSHOT_VERSION] {
+            let mut buf = Vec::new();
+            Snapshot::new_with_version(&state, version.clone())
+                .save(&mut buf)
+                .unwrap();
+            let loaded = Snapshot::<MicrovmState>::load(&mut buf.as_slice()).unwrap();
+            assert_eq!(loaded.version(), &version);
+        }
     }
 
     #[test]

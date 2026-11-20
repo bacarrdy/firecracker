@@ -96,18 +96,52 @@ pub fn simulate_queue_event(b: &mut VirtioBlock, maybe_expected_irq: Option<bool
     }
 }
 
+// Process one CQ batch, retaining this operation for tests that inspect an
+// intermediate admission boundary.
 #[cfg(test)]
-pub fn simulate_async_completion_event(b: &mut VirtioBlock, expected_irq: bool) {
+fn process_async_completion_batch(b: &mut VirtioBlock) {
     if let FileEngine::Async(ref mut engine) = b.disk.file_engine {
-        // Wait for all the async operations to complete.
         engine.drain(false).unwrap();
-        // Wait for the async completion event to be sent.
+        // Wait for the eventfd notification, as in the original test helper.
         thread::sleep(Duration::from_millis(150));
-        // Handle event.
         b.process_async_completion_event();
     }
+}
 
-    // Validate if there are pending IRQs.
+#[cfg(test)]
+pub fn simulate_async_completion_event_once(b: &mut VirtioBlock, expected_irq: bool) {
+    process_async_completion_batch(b);
+    assert_eq!(
+        b.interrupt_trigger()
+            .has_pending_interrupt(VirtioInterruptType::Queue(0)),
+        expected_irq
+    );
+}
+
+#[cfg(test)]
+pub fn simulate_async_completion_event(b: &mut VirtioBlock, expected_irq: bool) {
+    if matches!(b.disk.file_engine, FileEngine::Async(_)) {
+        // Always process one batch, including the no-in-flight case used by
+        // rate-limited tests. Each completion may submit another child, or
+        // resume a previously throttled request, so keep going until none remain.
+        const MAX_BATCHES: usize = 128;
+        let mut quiesced = false;
+        for _ in 0..MAX_BATCHES {
+            process_async_completion_batch(b);
+            let FileEngine::Async(engine) = &b.disk.file_engine else {
+                unreachable!()
+            };
+            if engine.in_flight() == 0 {
+                quiesced = true;
+                break;
+            }
+        }
+        assert!(
+            quiesced,
+            "block requests did not complete after {MAX_BATCHES} CQ batches"
+        );
+    }
+
     assert_eq!(
         b.interrupt_trigger()
             .has_pending_interrupt(VirtioInterruptType::Queue(0)),
@@ -143,7 +177,7 @@ impl<'a, 'b> RequestDescriptorChain<'a, 'b> {
     ///
     /// The header, data and status descriptors are put into the first three indices in
     /// the queue's descriptor table. They point to address 0x1000, 0x2000 and 0x3000 in guest
-    /// memory, respectively, and each have their `len` set to 0x1000.
+    /// memory, respectively, with a 16-byte header, 0x1000-byte data buffer and one-byte status.
     ///
     /// The data descriptor is initialized to be write_only
     pub fn new(vq: &'b VirtQueue<'a>) -> Self {
@@ -193,7 +227,7 @@ pub fn read_blk_req_descriptors(vq: &VirtQueue) {
 
     // Set the request type descriptor.
     vq.avail.ring[request_type_desc as usize].set(request_type_desc);
-    vq.dtable[request_type_desc as usize].set(request_addr, len, VIRTQ_DESC_F_NEXT, data_desc);
+    vq.dtable[request_type_desc as usize].set(request_addr, 16, VIRTQ_DESC_F_NEXT, data_desc);
 
     // Set the data descriptor.
     vq.avail.ring[data_desc as usize].set(data_desc);
@@ -206,7 +240,7 @@ pub fn read_blk_req_descriptors(vq: &VirtQueue) {
 
     // Set the status descriptor.
     vq.avail.ring[status_desc as usize].set(status_desc);
-    vq.dtable[status_desc as usize].set(status_addr, len, VIRTQ_DESC_F_WRITE, status_desc + 1);
+    vq.dtable[status_desc as usize].set(status_addr, 1, VIRTQ_DESC_F_WRITE, status_desc + 1);
 
     // Mark the next available descriptor.
     vq.avail.idx.set(1);

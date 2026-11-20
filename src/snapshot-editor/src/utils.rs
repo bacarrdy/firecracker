@@ -36,7 +36,9 @@ pub fn save_vmstate(microvm_state: MicrovmState, output_path: &PathBuf) -> Resul
         .truncate(true)
         .open(output_path)
         .map_err(UtilsError::OutputFileOpen)?;
-    let mut snapshot = Snapshot::new(microvm_state);
+    // Keep the format a 12.0 VMM can read unless the state needs 12.1.
+    let version = vmm::persist::snapshot_version_for(&microvm_state);
+    let mut snapshot = Snapshot::new_with_version(microvm_state, version);
     snapshot
         .save(&mut output_file)
         .map_err(UtilsError::VmStateSave)?;

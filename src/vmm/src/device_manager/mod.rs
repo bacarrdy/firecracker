@@ -382,6 +382,20 @@ impl DeviceManager {
         Ok(())
     }
 
+    /// Quiesce block devices before serializing a snapshot.
+    pub fn prepare_block_devices_for_save(&self) -> Result<(), String> {
+        let mut result = Ok(());
+        self.for_each_virtio_device_mut(|kind, device| {
+            if kind == VirtioDeviceType::Block && result.is_ok() {
+                let block = device.as_mut_any().downcast_mut::<Block>().unwrap();
+                if let Block::Virtio(block) = block {
+                    result = block.prepare_save().map_err(|e| e.to_string());
+                }
+            }
+        });
+        result
+    }
+
     /// Artificially kick VirtIO devices as if they had external events.
     pub fn kick_virtio_devices(&self) {
         info!("Artificially kick devices");
@@ -776,9 +790,9 @@ impl<'a> Persist<'a> for DeviceManager {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
     use vmm_sys_util::tempfile::TempFile;
 
+    use super::*;
     use crate::builder::tests::{
         CustomBlockConfig, default_kernel_cmdline, default_vmm, default_vmm_with_pci,
         insert_block_devices,

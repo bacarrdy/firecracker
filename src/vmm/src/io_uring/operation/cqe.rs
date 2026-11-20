@@ -10,16 +10,36 @@ use crate::vstate::memory::ByteValued;
 unsafe impl ByteValued for io_uring_cqe {}
 
 /// Wrapper over a completed operation.
+///
+/// Kernel CQEs carry signed 32-bit results. Logical block requests may combine several
+/// such operations and return a successful byte count up to u32::MAX, so this wrapper
+/// stores the result in i64. Negative results remain error codes.
 #[derive(Debug)]
 pub struct Cqe<T> {
-    res: i32,
+    res: i64,
     user_data: T,
+    progress: u32,
 }
 
 impl<T: Debug> Cqe<T> {
     /// Construct a Cqe object.
-    pub fn new(res: i32, user_data: T) -> Self {
-        Self { res, user_data }
+    pub fn new(res: i64, user_data: T) -> Self {
+        Self {
+            res,
+            user_data,
+            progress: 0,
+        }
+    }
+
+    /// Record bytes known to have completed before a logical operation failed.
+    pub fn with_progress(mut self, progress: u32) -> Self {
+        self.progress = progress;
+        self
+    }
+
+    /// Bytes known to have completed before an error.
+    pub fn progress(&self) -> u32 {
+        self.progress
     }
 
     /// Return the number of bytes successfully transferred by this operation.
@@ -32,9 +52,13 @@ impl<T: Debug> Cqe<T> {
         let res = self.res;
 
         if res < 0 {
-            Err(std::io::Error::from_raw_os_error(res))
+            Err(std::io::Error::from_raw_os_error(
+                i32::try_from(res).unwrap_or(-libc::EIO),
+            ))
         } else {
-            Ok(u32::try_from(self.res).unwrap())
+            u32::try_from(self.res).map_err(|_| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "completion count overflow")
+            })
         }
     }
 
@@ -42,6 +66,7 @@ impl<T: Debug> Cqe<T> {
     pub fn map_user_data<U: Debug, F: FnOnce(T) -> U>(self, op: F) -> Cqe<U> {
         Cqe {
             res: self.res,
+            progress: self.progress,
             user_data: op(self.user_data()),
         }
     }
@@ -76,6 +101,21 @@ mod tests {
 
             assert_eq!(cqe.result().unwrap(), 128);
         }
+    }
+
+    #[test]
+    fn test_logical_result_above_kernel_cqe_range() {
+        let cqe = Cqe::new(i64::from(u32::MAX), 7u8).with_progress(512);
+        assert_eq!(cqe.result().unwrap(), u32::MAX);
+        assert_eq!(cqe.progress(), 512);
+        assert_eq!(cqe.map_user_data(|n| n + 1).progress(), 512);
+        assert_eq!(
+            Cqe::new(i64::from(u32::MAX) + 1, 0u8)
+                .result()
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
     }
 
     #[test]

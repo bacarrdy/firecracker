@@ -29,6 +29,10 @@ pub enum OpCode {
     Write = io_uring_op::IORING_OP_WRITE as u8,
     /// Fsync operation.
     Fsync = io_uring_op::IORING_OP_FSYNC as u8,
+    /// Vectored read operation.
+    Readv = io_uring_op::IORING_OP_READV as u8,
+    /// Vectored write operation.
+    Writev = io_uring_op::IORING_OP_WRITEV as u8,
 }
 
 // Useful for outputting errors.
@@ -38,6 +42,8 @@ impl From<OpCode> for &'static str {
             OpCode::Read => "read",
             OpCode::Write => "write",
             OpCode::Fsync => "fsync",
+            OpCode::Readv => "readv",
+            OpCode::Writev => "writev",
         }
     }
 }
@@ -97,6 +103,24 @@ impl<T: Debug> Operation<T> {
             flags: 0,
             offset: Some(offset),
             user_data,
+        }
+    }
+
+    /// Construct a vectored read: `iovecs` is the address of `count` iovecs, which must stay
+    /// valid until the operation completes.
+    pub fn readv(fd: FixedFd, iovecs: usize, count: u32, offset: u64, user_data: T) -> Self {
+        Self {
+            opcode: OpCode::Readv,
+            ..Self::read(fd, iovecs, count, offset, user_data)
+        }
+    }
+
+    /// Construct a vectored write: `iovecs` is the address of `count` iovecs, which must stay
+    /// valid until the operation completes.
+    pub fn writev(fd: FixedFd, iovecs: usize, count: u32, offset: u64, user_data: T) -> Self {
+        Self {
+            opcode: OpCode::Writev,
+            ..Self::write(fd, iovecs, count, offset, user_data)
         }
     }
 

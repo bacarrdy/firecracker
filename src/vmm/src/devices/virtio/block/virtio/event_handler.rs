@@ -13,6 +13,7 @@ impl VirtioBlock {
     const PROCESS_QUEUE: u32 = 1;
     const PROCESS_RATE_LIMITER: u32 = 2;
     const PROCESS_ASYNC_COMPLETION: u32 = 3;
+    const PROCESS_RETRY: u32 = 4;
 
     fn register_runtime_events(&self, ops: &mut EventOps) {
         if let Err(err) = ops.add(Events::with_data(
@@ -28,6 +29,18 @@ impl VirtioBlock {
             EventSet::IN,
         )) {
             error!("Failed to register ratelimiter event: {}", err);
+        }
+        if let Err(err) = ops.add(Events::with_data(
+            &self.retry_timer,
+            Self::PROCESS_RETRY,
+            EventSet::IN,
+        )) {
+            // Runtime event sources remain registered across guest reset.
+            if !matches!(err, event_manager::Error::FdAlreadyRegistered) {
+                error!("Failed to register block retry timer: {}", err);
+                // Without this event source, accepted operations could never make progress.
+                std::process::abort();
+            }
         }
         if let FileEngine::Async(ref engine) = self.disk.file_engine
             && let Err(err) = ops.add(Events::with_data(
@@ -88,6 +101,7 @@ impl MutEventSubscriber for VirtioBlock {
                 Self::PROCESS_QUEUE => self.process_queue_event(),
                 Self::PROCESS_RATE_LIMITER => self.process_rate_limiter_event(),
                 Self::PROCESS_ASYNC_COMPLETION => self.process_async_completion_event(),
+                Self::PROCESS_RETRY => self.process_retry_event(),
                 _ => warn!("Block: Spurious event received: {:?}", source),
             }
         } else {
@@ -102,6 +116,9 @@ impl MutEventSubscriber for VirtioBlock {
                 Self::PROCESS_QUEUE => self.drain_queue_events(),
                 Self::PROCESS_RATE_LIMITER => {
                     let _ = self.rate_limiter.event_handler();
+                }
+                Self::PROCESS_RETRY => {
+                    self.retry_timer.read();
                 }
                 Self::PROCESS_ASYNC_COMPLETION => {
                     if let FileEngine::Async(ref engine) = self.disk.file_engine {
@@ -141,6 +158,43 @@ mod tests {
     use crate::devices::virtio::queue::VIRTQ_DESC_F_NEXT;
     use crate::devices::virtio::test_utils::{VirtQueue, default_interrupt, default_mem};
     use crate::vstate::memory::{Bytes, GuestAddress};
+
+    #[test]
+    fn test_retry_timer_drives_queue_without_guest_kick() {
+        let mut event_manager = EventManager::new().unwrap();
+        let mut block = default_block(FileEngineType::Async);
+        let mem = default_mem();
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
+        set_queue(&mut block, 0, vq.create_queue());
+        read_blk_req_descriptors(&vq);
+        vq.dtable[0].len.set(16);
+        vq.dtable[2].len.set(1);
+        let header = GuestAddress(vq.dtable[0].addr.get());
+        let data = GuestAddress(vq.dtable[1].addr.get());
+        mem.write_obj::<u32>(VIRTIO_BLK_T_OUT, header).unwrap();
+        vq.dtable[1].flags.set(VIRTQ_DESC_F_NEXT);
+        vq.dtable[1].len.set(512);
+        mem.write_obj::<u64>(123, data).unwrap();
+        block.activate(mem.clone(), default_interrupt()).unwrap();
+        let FileEngine::Async(engine) = &mut block.disk.file_engine else {
+            unreachable!()
+        };
+        engine.inject_submit_failure();
+        let block = Arc::new(Mutex::new(block));
+        event_manager.add_subscriber(block.clone());
+        block.lock().unwrap().queue_evts[0].write(1).unwrap();
+        event_manager.run_with_timeout(100).unwrap();
+        assert_eq!(vq.used.idx.get(), 0);
+        // No further guest kick: the timer retries the failed submission and
+        // the ring event publishes the completion.
+        for _ in 0..10 {
+            event_manager.run_with_timeout(100).unwrap();
+            if vq.used.idx.get() == 1 {
+                break;
+            }
+        }
+        assert_eq!(vq.used.idx.get(), 1);
+    }
 
     #[test]
     fn test_event_handler() {

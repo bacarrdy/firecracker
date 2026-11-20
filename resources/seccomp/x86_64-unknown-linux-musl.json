@@ -40,6 +40,22 @@
                 "comment": "Used by the VirtIO net device to read from tap"
             },
             {
+                "syscall": "pread64",
+                "comment": "Used by Sync VirtIO block reads at an explicit file offset"
+            },
+            {
+                "syscall": "pwrite64",
+                "comment": "Used by Sync VirtIO block writes at an explicit file offset"
+            },
+            {
+                "syscall": "preadv",
+                "comment": "Used by Sync VirtIO block reads into multiple guest buffers"
+            },
+            {
+                "syscall": "pwritev",
+                "comment": "Used by Sync VirtIO block writes from multiple guest buffers"
+            },
+            {
                 "syscall": "fsync"
             },
             {

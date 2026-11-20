@@ -223,7 +223,8 @@ impl VirtioDevice for Block {
 
     fn prepare_save(&mut self) {
         match self {
-            Self::Virtio(b) => b.prepare_save(),
+            // Virtio block is prepared fallibly before device state serialization.
+            Self::Virtio(_) => (),
             Self::VhostUser(b) => b.prepare_save(),
         }
     }

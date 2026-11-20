@@ -499,6 +499,9 @@ impl Vmm {
     /// Saves the state of a paused Microvm.
     pub fn save_state(&mut self, vm_info: &VmInfo) -> Result<MicrovmState, MicrovmStateError> {
         self.check_unsnapshottable_devices()?;
+        self.device_manager
+            .prepare_block_devices_for_save()
+            .map_err(MicrovmStateError::PrepareBlock)?;
 
         // We need to save device state before saving KVM state.
         // Some devices, (at the time of writing this comment block device with async engine)
