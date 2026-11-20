@@ -81,12 +81,24 @@ runs of that downstream build (32 runs per profile, per engine and per
 512-byte or 4096-byte backing sector size). These measurements predate this
 standalone reference branch.
 
-The x86_64 reference passed all 100 block tests, including 18 event-driven
+The x86_64 reference passed all 104 block tests, including 22 event-driven
 cases. A local KVM guest running against the release binary with the default
 seccomp filter wrote 1024 bytes across a 4 KiB boundary on an 8 MiB regular
 file, then read back one sector and both surrounding blocks. Guest verification
 and the host checksum of the entire file matched for both `Sync` and `Async`.
 Each engine reported one direct read-modify-write and one bounced read.
+
+If a later bounce chunk fails, the implementation reports the confirmed prefix.
+The read test injected a second-chunk failure after 1,048,064 bytes reached
+guest memory. Both engines reported a virtqueue used length of 1,048,065,
+including the status byte. The corresponding write test checked the byte
+counter against the bytes actually present in the backing file.
+
+A deferred request restores its rate-limit reservation, including one-time
+bursts and any timer armed by that reservation. In the regression test a
+256 KiB write waits behind a partial-block write with a 64 KiB/s limiter.
+The test checks that the deferred write leaves the timer disarmed and the
+two requests finish without waiting out the rejected admission's debt.
 
 To exercise the block unit tests, including the real `O_DIRECT` descriptor
 round trip, run the following on Linux with io_uring enabled and a temporary
