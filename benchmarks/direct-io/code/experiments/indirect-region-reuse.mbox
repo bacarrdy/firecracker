@@ -1,0 +1,78 @@
+From 45ff2e5fb6334c01eda47447f233202fa6f8936b Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 21:13:41 +0200
+Subject: [PATCH] virtio-blk: reuse a checked mapping for single-region
+ indirect tables
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../devices/virtio/block/virtio/request.rs    | 39 +++++++++++++------
+ 1 file changed, 28 insertions(+), 11 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/request.rs b/src/vmm/src/devices/virtio/block/virtio/request.rs
+index 2b9871e7f..a1fbc5116 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/request.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/request.rs
+@@ -9,7 +9,7 @@ use std::convert::From;
+ use std::mem::size_of;
+ 
+ use arrayvec::ArrayVec;
+-use vm_memory::GuestMemoryError;
++use vm_memory::{GuestMemoryBackend, GuestMemoryError};
+ 
+ use super::{MAX_DISCARD_SECTORS, SECTOR_SHIFT, SECTOR_SIZE, VirtioBlockError, io as block_io};
+ use crate::devices::virtio::block::virtio::device::DiskProperties;
+@@ -489,8 +489,21 @@ impl Request {
+                 if desc.len == 0 || desc.len % stride != 0 {
+                     return Err(VirtioBlockError::InvalidDataLength);
+                 }
+-                mem.check_range_plugged(desc.addr, desc.len as usize)
+-                    .map_err(VirtioBlockError::GuestMemory)?;
++                // Reuse the checked region for the common single-region table.
++                // A table spanning adjacent mappings keeps the guest-address reader.
++                let len = desc.len as usize;
++                let table = if let Some((region, offset)) = mem.to_region_addr(desc.addr)
++                    && let Ok(slice) = region.get_slice(offset, len)
++                {
++                    region
++                        .check_range_plugged(offset, len)
++                        .map_err(VirtioBlockError::GuestMemory)?;
++                    Some(slice)
++                } else {
++                    mem.check_range_plugged(desc.addr, len)
++                        .map_err(VirtioBlockError::GuestMemory)?;
++                    None
++                };
+                 let entries = desc.len / stride;
+                 let mut index = 0u16;
+                 // The original queue size bounds the work, even for a table with
+@@ -499,14 +512,18 @@ impl Request {
+                     if u32::from(index) >= entries {
+                         break;
+                     }
+-                    let addr = desc
+-                        .addr
+-                        .checked_add(u64::from(index) * u64::from(stride))
+-                        .ok_or(VirtioBlockError::GuestMemory(
+-                            GuestMemoryError::GuestAddressOverflow,
+-                        ))?;
+-                    let entry: Descriptor =
+-                        mem.read_obj(addr).map_err(VirtioBlockError::GuestMemory)?;
++                    let offset = u32::from(index) * stride;
++                    let entry: Descriptor = match &table {
++                        Some(slice) => slice
++                            .read_obj(offset as usize)
++                            .map_err(GuestMemoryError::from),
++                        None => desc
++                            .addr
++                            .checked_add(u64::from(offset))
++                            .ok_or(GuestMemoryError::GuestAddressOverflow)
++                            .and_then(|addr| mem.read_obj(addr)),
++                    }
++                    .map_err(VirtioBlockError::GuestMemory)?;
+                     if entry.flags & INDIRECT != 0 {
+                         break;
+                     }
+-- 
+2.43.0
+

@@ -1,0 +1,145 @@
+From 8ddcce13be34aa7870263544d4abe907afed15d1 Mon Sep 17 00:00:00 2001
+From: Jay Chung <jaehoc@amazon.com>
+Date: Fri, 11 Sep 2026 13:18:26 +0000
+Subject: [PATCH 1/2] perf(virtio): Mask ring index instead of dividing
+
+Use a power-of-two mask for ring positions in pop and used-ring writes.
+Queue initialization already requires a nonzero power-of-two size.
+
+Convert the index and size to usize before masking. In the measured x86
+build, the u16 mask widened the index load to overlap the preceding
+16-bit store and stalled store forwarding. The usize form keeps the
+index load 16 bits wide and removes the divide.
+
+Signed-off-by: Jay Chung <jaehoc@amazon.com>
+(cherry picked from commit 3a76e3ff9f90e063bb45a577a213f2d1ba2f6345)
+---
+ src/vmm/src/devices/virtio/queue.rs | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 3621735d5..6c8efbff3 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -316,6 +316,16 @@ impl Queue {
+             + std::mem::size_of::<u16>()
+     }
+ 
++    /// Position of a ring index within the ring.
++    ///
++    /// `initialize` requires a power-of-two `size`, so this is `index % size` without the divide.
++    /// The mask is `usize` to keep the load of `index` 16 bits wide. A wider load overlaps the
++    /// store that advanced it and loses store forwarding.
++    #[inline(always)]
++    fn ring_index(&self, index: u16) -> usize {
++        usize::from(index) & (usize::from(self.size) - 1)
++    }
++
+     fn get_aligned_slice_ptr<T, M: GuestMemoryBackend>(
+         &self,
+         mem: &M,
+@@ -545,10 +555,8 @@ impl Queue {
+         // We use `self.next_avail` to store the position, in `ring`, of the next available
+         // descriptor index, with a twist: we always only increment `self.next_avail`, so the
+         // actual position will be `self.next_avail % self.size`.
+-        let idx = self.next_avail.0 % self.size;
+-        // SAFETY:
+-        // index is bound by the queue size
+-        let desc_index = unsafe { self.avail_ring_ring_get(usize::from(idx)) };
++        // SAFETY: the ring index is bounded by the initialized queue size.
++        let desc_index = unsafe { self.avail_ring_ring_get(self.ring_index(self.next_avail.0)) };
+ 
+         DescriptorChain::checked_new(self.desc_table_ptr, self.size, desc_index).inspect(|_| {
+             self.next_avail += Wrapping(1);
+@@ -578,15 +586,14 @@ impl Queue {
+             return Err(QueueError::DescIndexOutOfBounds(desc_index));
+         }
+ 
+-        let next_used = (self.next_used + Wrapping(ring_index_offset)).0 % self.size;
++        let next_used = self.ring_index((self.next_used + Wrapping(ring_index_offset)).0);
+         let used_element = UsedElement {
+             id: u32::from(desc_index),
+             len,
+         };
+-        // SAFETY:
+-        // index is bound by the queue size
++        // SAFETY: the ring index is bounded by the initialized queue size.
+         unsafe {
+-            self.used_ring_ring_set(usize::from(next_used), used_element);
++            self.used_ring_ring_set(next_used, used_element);
+         }
+         Ok(())
+     }
+-- 
+2.43.0
+
+
+From 8649a6f2a21e5cf732e27ce5d0331be221e37610 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 16:58:30 +0200
+Subject: [PATCH 2/2] virtio: cover split-ring positions at the u16 wrap
+
+Exercise the available and used rings at every power-of-two queue size allowed by initialization. Keep a regression for the existing zero-size used-element error before initialization.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/src/devices/virtio/queue.rs | 43 +++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 6c8efbff3..fd2682809 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -1694,6 +1694,49 @@ mod tests {
+         assert_eq!(q.used_ring_avail_event_get(), 1);
+     }
+ 
++    #[test]
++    fn test_split_ring_slots_wrap() {
++        let mem = single_region_mem(0x100000);
++        for power in 0..=15 {
++            let size = 1u16 << power;
++            let vq = VirtQueue::new(GuestAddress(0), &mem, size);
++            let mut q = vq.create_queue();
++
++            q.next_avail = Wrapping(u16::MAX);
++            vq.avail.ring[usize::from(size - 1)].set(size - 1);
++            vq.avail.idx.set(0);
++            assert_eq!(q.pop().unwrap().unwrap().index, size - 1);
++            assert_eq!(q.next_avail, Wrapping(0));
++
++            vq.avail.ring[0].set(0);
++            vq.avail.idx.set(1);
++            assert_eq!(q.pop().unwrap().unwrap().index, 0);
++            assert_eq!(q.next_avail, Wrapping(1));
++
++            q.next_used = Wrapping(u16::MAX);
++            q.write_used_element(1, 0, 11).unwrap();
++            vq.check_used_elem(0, 0, 11);
++            q.add_used(size - 1, 22).unwrap();
++            q.advance_used_ring_idx();
++            vq.check_used_elem(size - 1, size - 1, 22);
++            assert_eq!(vq.used.idx.get(), 0);
++
++            q.add_used(0, 33).unwrap();
++            q.advance_used_ring_idx();
++            vq.check_used_elem(0, 0, 33);
++            assert_eq!(vq.used.idx.get(), 1);
++        }
++    }
++
++    #[test]
++    fn test_zero_sized_queue_rejects_used_element() {
++        let mut q = Queue::new(0);
++        assert!(matches!(
++            q.write_used_element(0, 0, 0),
++            Err(DescIndexOutOfBounds(0))
++        ));
++    }
++
+     #[test]
+     fn test_initialize_with_aligned_pointer() {
+         let mut q = Queue::new(FIRECRACKER_MAX_QUEUE_SIZE);
+-- 
+2.43.0
+

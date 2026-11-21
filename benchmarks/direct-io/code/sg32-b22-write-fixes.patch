@@ -1,0 +1,204 @@
+diff --git a/src/vmm/src/devices/virtio/block/virtio/device.rs b/src/vmm/src/devices/virtio/block/virtio/device.rs
+index 3d119962b61b6618c7d0ff815074b2148ae3d40d..a8ee9cba70f39e28f3e83528a967b775c16be7a9 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/device.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/device.rs
+@@ -710,8 +710,8 @@ impl VirtioBlock {
+         let queue = &mut self.queues[queue_index];
+         let mut used_any = false;
+ 
+-        while let Some((head, remaining)) = queue.pop_or_enable_notification_with_remaining()? {
+-            self.metrics.remaining_reqs_count.add(remaining.into());
++        while let Some(head) = queue.pop_or_enable_notification()? {
++            self.metrics.remaining_reqs_count.add(queue.len().into());
+             let processing_result =
+                 match Request::parse_with_status(&head, &active_state.mem, self.disk.nsectors) {
+                     Ok(request) => {
+diff --git a/src/vmm/src/devices/virtio/block/virtio/metrics.rs b/src/vmm/src/devices/virtio/block/virtio/metrics.rs
+index ff8d2349bcc3cc2651dbbd25c4d3ebb751956daa..b1ec31ff13ac4fd076c5895293a8fe7f32b7b5ec 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/metrics.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/metrics.rs
+@@ -182,7 +182,7 @@ pub struct BlockDeviceMetrics {
+     /// Number of virtio events throttled because of the IO engine.
+     /// This happens when the io_uring submission queue is full.
+     pub io_engine_throttled_events: SharedIncMetric,
+-    /// Sum of available heads left in the avail index observed for each successful pop.
++    /// Number of remaining requests in the queue.
+     pub remaining_reqs_count: SharedIncMetric,
+     /// Direct-I/O drive: reads served through an aligned bounce buffer (unaligned guest request).
+     pub direct_bounce_reads: SharedIncMetric,
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 3621735d59b805596b23c2cc22b5d892fb012734..614ce0456cf2fe50b71034585b3e91b914341aff 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -468,7 +468,6 @@ impl Queue {
+ 
+     fn checked_len(&self) -> Result<u16, InvalidAvailIdx> {
+         let len = self.len();
+-        // A driver cannot publish more descriptor chain heads than the queue holds.
+         if len > self.size {
+             return Err(InvalidAvailIdx {
+                 queue_size: self.size,
+@@ -510,23 +509,15 @@ impl Queue {
+     pub fn pop_or_enable_notification(
+         &mut self,
+     ) -> Result<Option<DescriptorChain>, InvalidAvailIdx> {
+-        if self.len_or_enable_notification()? == 0 {
+-            return Ok(None);
++        if !self.uses_notif_suppression {
++            return self.pop();
+         }
+ 
+-        Ok(self.pop_unchecked())
+-    }
+-
+-    /// Pop a chain and report how many heads were left in the available-index snapshot.
+-    pub(crate) fn pop_or_enable_notification_with_remaining(
+-        &mut self,
+-    ) -> Result<Option<(DescriptorChain, u16)>, InvalidAvailIdx> {
+-        let len = self.len_or_enable_notification()?;
+-        if len == 0 {
++        if self.try_enable_notification()? {
+             return Ok(None);
+         }
+ 
+-        Ok(self.pop_unchecked().map(|head| (head, len - 1)))
++        Ok(self.pop_unchecked())
+     }
+ 
+     /// Pop the first available descriptor chain from the avail ring.
+@@ -612,11 +603,19 @@ impl Queue {
+         Ok(())
+     }
+ 
+-    /// Return the available length, arming driver notifications before returning zero.
+-    fn len_or_enable_notification(&mut self) -> Result<u16, InvalidAvailIdx> {
+-        let len = self.checked_len()?;
+-        if len != 0 || !self.uses_notif_suppression {
+-            return Ok(len);
++    /// Try to enable notification events from the guest driver. Returns true if notifications were
++    /// successfully enabled. Otherwise it means that one or more descriptors can still be consumed
++    /// from the available ring and we can't guarantee that there will be a notification. In this
++    /// case the caller might want to consume the mentioned descriptors and call this method again.
++    fn try_enable_notification(&mut self) -> Result<bool, InvalidAvailIdx> {
++        // If the device doesn't use notification suppression, we'll continue to get notifications
++        // no matter what.
++        if !self.uses_notif_suppression {
++            return Ok(true);
++        }
++
++        if self.checked_len()? != 0 {
++            return Ok(false);
+         }
+ 
+         // Set the next expected avail_idx as avail_event.
+@@ -625,8 +624,9 @@ impl Queue {
+         // Make sure all subsequent reads are performed after we set avail_event.
+         fence(Ordering::SeqCst);
+ 
+-        // A driver may have published more descriptors before observing avail_event.
+-        self.checked_len()
++        // If the actual avail_idx is different than next_avail one or more descriptors can still
++        // be consumed from the available ring.
++        Ok(self.checked_len()? == 0)
+     }
+ 
+     /// Enable notification suppression.
+@@ -635,7 +635,7 @@ impl Queue {
+     }
+ 
+     /// Arm `avail_event` at the current `avail.idx` so the driver's next
+-    /// publish produces a notification. Unlike [`Self::len_or_enable_notification`],
++    /// publish produces a notification. Unlike [`Self::try_enable_notification`],
+     /// does not require the queue to be drained and does not recheck
+     /// `avail.idx`; only correct when the driver does not add to the avail
+     /// ring until it has observed our used-ring update.
+@@ -1150,14 +1150,12 @@ mod verification {
+ 
+     #[kani::proof]
+     #[kani::unwind(0)]
+-    fn verify_len_or_enable_notification() {
++    fn verify_try_enable_notification() {
+         let ProofContext(mut queue, _) = ProofContext::bounded_queue();
+ 
+         kani::assume(queue.len() <= queue.size);
+ 
+-        let len = queue.len_or_enable_notification().unwrap();
+-        assert_eq!(len, queue.len());
+-        if len == 0 && queue.uses_notif_suppression {
++        if queue.try_enable_notification().unwrap() && queue.uses_notif_suppression {
+             // We only require new notifications if the queue is empty (e.g. we've processed
+             // everything we've been notified about), or if suppression is disabled.
+             assert!(queue.is_empty());
+@@ -1617,7 +1615,7 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn test_len_or_enable_notification() {
++    fn test_try_enable_notification() {
+         let m = &default_mem();
+         let vq = VirtQueue::new(GuestAddress(0), m, 16);
+         let mut q = vq.create_queue();
+@@ -1631,59 +1629,19 @@ mod tests {
+ 
+         assert_eq!(q.len(), 1);
+ 
+-        // Notification suppression is disabled.
+-        assert_eq!(q.len_or_enable_notification().unwrap(), 1);
++        // Notification suppression is disabled. try_enable_notification shouldn't do anything.
++        assert!(q.try_enable_notification().unwrap());
+         assert_eq!(q.used_ring_avail_event_get(), 0);
+ 
+         // Enable notification suppression and check again. There is 1 available descriptor chain.
+         // Again nothing should happen.
+         q.enable_notif_suppression();
+-        assert_eq!(q.len_or_enable_notification().unwrap(), 1);
++        assert!(!q.try_enable_notification().unwrap());
+         assert_eq!(q.used_ring_avail_event_get(), 0);
+ 
+         // Consume the descriptor. avail_event should be modified
+         assert!(q.pop().unwrap().is_some());
+-        assert_eq!(q.len_or_enable_notification().unwrap(), 0);
+-        assert_eq!(q.used_ring_avail_event_get(), 1);
+-    }
+-
+-    #[test]
+-    fn test_pop_with_remaining_wraparound() {
+-        let mem = single_region_mem(0x6000);
+-        let vq = VirtQueue::new(GuestAddress(0), &mem, 4);
+-        let mut q = vq.create_queue();
+-        q.enable_notif_suppression();
+-        q.next_avail = Wrapping(u16::MAX);
+-        vq.avail.ring[3].set(3);
+-        vq.avail.ring[0].set(0);
+-        vq.avail.idx.set(1);
+-
+-        let (head, remaining) = q
+-            .pop_or_enable_notification_with_remaining()
+-            .unwrap()
+-            .unwrap();
+-        assert_eq!((head.index, remaining), (3, 1));
+-        assert_eq!(q.used_ring_avail_event_get(), 0);
+-
+-        q.undo_pop();
+-        let (head, remaining) = q
+-            .pop_or_enable_notification_with_remaining()
+-            .unwrap()
+-            .unwrap();
+-        assert_eq!((head.index, remaining), (3, 1));
+-
+-        let (head, remaining) = q
+-            .pop_or_enable_notification_with_remaining()
+-            .unwrap()
+-            .unwrap();
+-        assert_eq!((head.index, remaining), (0, 0));
+-        assert_eq!(q.used_ring_avail_event_get(), 0);
+-
+-        assert!(
+-            q.pop_or_enable_notification_with_remaining()
+-                .unwrap()
+-                .is_none()
+-        );
++        assert!(q.try_enable_notification().unwrap());
+         assert_eq!(q.used_ring_avail_event_get(), 1);
+     }
+ 

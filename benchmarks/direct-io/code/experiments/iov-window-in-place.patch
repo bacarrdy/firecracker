@@ -1,0 +1,421 @@
+From 27a0c253200b309d21751a9a0841d521792024ec Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 11:50:23 +0200
+Subject: [PATCH] virtio-blk: submit bounded windows from the request-owned
+ iovecs
+
+Use the existing iovecs for sync and async I/O. If the byte limit falls inside a segment, restore its original length before advancing after completion or retrying a refused ring push. The kernel sees the same window boundaries without allocating or copying a second iovec table.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../virtio/block/virtio/io/async_io.rs        |  59 +++----
+ .../src/devices/virtio/block/virtio/io/mod.rs | 147 +++++++++++++++---
+ .../devices/virtio/block/virtio/io/sync_io.rs |  39 ++---
+ 3 files changed, 172 insertions(+), 73 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index 6de99f4ef..34815a544 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -16,9 +16,7 @@ use vmm_sys_util::eventfd::EventFd;
+ use crate::devices::virtio::block::virtio::io::direct::{
+     Bounce, BounceBuf, BouncePlan, DioAlign, Wait, bounce_buf,
+ };
+-use crate::devices::virtio::block::virtio::io::{
+-    RequestError, io_window_with_limit, segment_iovecs,
+-};
++use crate::devices::virtio::block::virtio::io::{IoWindow, RequestError, segment_iovecs};
+ use crate::devices::virtio::block::virtio::request::DataSegment;
+ use crate::devices::virtio::block::virtio::{IO_URING_NUM_ENTRIES, PendingRequest};
+ use crate::io_uring::operation::{Cqe, OpCode, Operation};
+@@ -130,8 +128,7 @@ struct Transfer {
+     dirty_scalar: Option<DataSegment>,
+     scalar: Option<libc::iovec>,
+     remaining: Vec<libc::iovec>,
+-    window: Vec<libc::iovec>,
+-    window_bytes: usize,
++    window: IoWindow,
+     window_limit: usize,
+     offset: u64,
+     completed: u32,
+@@ -190,41 +187,47 @@ impl GuestOp {
+         };
+         let fd = t.fd;
+         let write = t.write;
++        // A refused ring push returns this request to the caller. Its last iovec may
++        // still describe the previous attempt. Nothing is in flight at this point.
++        t.window.restore(&mut t.remaining);
+         let (ptr, len, vectored) = if let Some(scalar) = &t.scalar {
+-            t.window_bytes = scalar.iov_len.min(t.window_limit);
++            t.window.bytes = scalar.iov_len.min(t.window_limit);
+             if let Some(dio) = t.dio
+                 && !dio.eligible(
+                     scalar.iov_base as usize,
+                     offset,
+-                    u32::try_from(t.window_bytes).expect("window is bounded by MAX_IO_BYTES"),
++                    u32::try_from(t.window.bytes).expect("window is bounded by MAX_IO_BYTES"),
+                 )
+             {
+                 return Err(self);
+             }
+             (
+                 scalar.iov_base as usize,
+-                u32::try_from(t.window_bytes).expect("window is bounded by MAX_IO_BYTES"),
++                u32::try_from(t.window.bytes).expect("window is bounded by MAX_IO_BYTES"),
+                 false,
+             )
+         } else {
+-            t.window_bytes = io_window_with_limit(&t.remaining, &mut t.window, t.window_limit);
++            // The request owns this allocation until its CQE. Moving the request into
++            // the ring does not move the iovec storage.
++            t.window = IoWindow::prepare(&mut t.remaining, t.window_limit);
++            let active = t.window.slice(&t.remaining);
+             if let Some(dio) = t.dio
+-                && !dio.eligible_iovecs(&t.window, offset)
++                && !dio.eligible_iovecs(active, offset)
+             {
+                 return Err(self);
+             }
+-            if t.window.is_empty() {
++            if active.is_empty() {
+                 (0, 0, false)
+-            } else if t.window.len() == 1 {
++            } else if active.len() == 1 {
+                 (
+-                    t.window[0].iov_base as usize,
+-                    u32::try_from(t.window_bytes).expect("window is bounded by MAX_IO_BYTES"),
++                    active[0].iov_base as usize,
++                    u32::try_from(t.window.bytes).expect("window is bounded by MAX_IO_BYTES"),
+                     false,
+                 )
+             } else {
+                 (
+-                    t.window.as_ptr() as usize,
+-                    u32::try_from(t.window.len()).expect("window is bounded by MAX_IOVECS"),
++                    active.as_ptr() as usize,
++                    u32::try_from(active.len()).expect("window is bounded by MAX_IOVECS"),
+                     true,
+                 )
+             }
+@@ -692,8 +695,7 @@ impl AsyncFileEngine {
+                     iov_len: count as usize,
+                 }),
+                 remaining: Vec::new(),
+-                window: Vec::new(),
+-                window_bytes: 0,
++                window: IoWindow::default(),
+                 window_limit: self.window_limit(),
+                 offset,
+                 completed: 0,
+@@ -738,7 +740,6 @@ impl AsyncFileEngine {
+             Err(error) => return Err(RequestError { req, error }),
+         };
+         let len: u64 = remaining.iter().map(|iov| iov.iov_len as u64).sum();
+-        let capacity = remaining.len().min(super::MAX_IOVECS);
+         let op = GuestOp {
+             req,
+             transfer: Some(Transfer {
+@@ -747,8 +748,7 @@ impl AsyncFileEngine {
+                 dirty_scalar: None,
+                 scalar: None,
+                 remaining,
+-                window: Vec::with_capacity(capacity),
+-                window_bytes: 0,
++                window: IoWindow::default(),
+                 window_limit: self.window_limit(),
+                 offset,
+                 completed: 0,
+@@ -948,6 +948,7 @@ impl AsyncFileEngine {
+                     op.req.into(),
+                 )));
+             };
++            transfer.window.restore(&mut transfer.remaining);
+             // Mark after every CQE, even negative ones, to cover writes to guest memory on errors
+             // and a dirty bitmap reset between child completions.
+             if let Some((addr, len)) = transfer.dirty_scalar {
+@@ -957,13 +958,13 @@ impl AsyncFileEngine {
+                 transfer.mem.mark_dirty(addr, len as usize);
+             }
+             if matches!(result, Ok(0))
+-                && transfer.window_bytes == 0
++                && transfer.window.bytes == 0
+                 && transfer.remaining.is_empty()
+             {
+                 return Ok(Some(Cqe::new(i64::from(transfer.completed), op.req.into())));
+             }
+             let count = match result {
+-                Ok(n) if n > 0 && n as usize <= transfer.window_bytes => n,
++                Ok(n) if n > 0 && n as usize <= transfer.window.bytes => n,
+                 _ => {
+                     return Ok(Some(
+                         Cqe::new(-i64::from(libc::EIO), op.req.into())
+@@ -1004,12 +1005,12 @@ impl AsyncFileEngine {
+                         u32::try_from(bytes).expect("window is bounded by MAX_IO_BYTES"),
+                     )
+                 } else {
+-                    let bytes = io_window_with_limit(
+-                        &transfer.remaining,
+-                        &mut transfer.window,
+-                        transfer.window_limit,
+-                    );
+-                    bytes != 0 && dio.eligible_iovecs(&transfer.window, offset)
++                    let mut window =
++                        IoWindow::prepare(&mut transfer.remaining, transfer.window_limit);
++                    let eligible = window.bytes != 0
++                        && dio.eligible_iovecs(window.slice(&transfer.remaining), offset);
++                    window.restore(&mut transfer.remaining);
++                    eligible
+                 };
+                 if !eligible {
+                     return Ok(Some(
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+index 9089af7b8..c21ddccf6 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+@@ -24,33 +24,43 @@ use crate::vstate::memory::{GuestAddress, GuestMemoryMmap};
+ const MAX_IO_BYTES: usize = 0x7fff_0000;
+ const MAX_IOVECS: usize = 1024;
+ 
+-/// Make a bounded host operation from the remaining raw guest-memory ranges.
+-fn io_window(iovecs: &[libc::iovec], window: &mut Vec<libc::iovec>) -> usize {
+-    io_window_with_limit(iovecs, window, MAX_IO_BYTES)
++/// One host I/O over a prefix of the request-owned iovecs. Only the last iovec
++/// may need shortening. Restore it before consuming a completion or retrying.
++#[derive(Debug, Default)]
++struct IoWindow {
++    entries: usize,
++    bytes: usize,
++    original_tail_len: Option<usize>,
+ }
+ 
+-fn io_window_with_limit(
+-    iovecs: &[libc::iovec],
+-    window: &mut Vec<libc::iovec>,
+-    limit: usize,
+-) -> usize {
+-    window.clear();
+-    let mut bytes = 0;
+-    for iov in iovecs.iter().take(MAX_IOVECS) {
+-        let len = iov.iov_len.min(limit - bytes);
+-        if len == 0 {
+-            break;
++impl IoWindow {
++    fn prepare(iovecs: &mut [libc::iovec], limit: usize) -> Self {
++        let mut window = Self::default();
++        for iov in iovecs.iter_mut().take(MAX_IOVECS) {
++            let available = limit - window.bytes;
++            if available == 0 || iov.iov_len == 0 {
++                break;
++            }
++            window.entries += 1;
++            if iov.iov_len > available {
++                window.original_tail_len = Some(std::mem::replace(&mut iov.iov_len, available));
++                window.bytes = limit;
++                break;
++            }
++            window.bytes += iov.iov_len;
+         }
+-        window.push(libc::iovec {
+-            iov_base: iov.iov_base,
+-            iov_len: len,
+-        });
+-        bytes += len;
+-        if bytes == limit {
+-            break;
++        window
++    }
++
++    fn slice<'a>(&self, iovecs: &'a [libc::iovec]) -> &'a [libc::iovec] {
++        &iovecs[..self.entries]
++    }
++
++    fn restore(&mut self, iovecs: &mut [libc::iovec]) {
++        if let Some(length) = self.original_tail_len.take() {
++            iovecs[self.entries - 1].iov_len = length;
+         }
+     }
+-    bytes
+ }
+ 
+ /// The host iovecs of a request's data segments. Fails if a segment is not inside guest memory
+@@ -772,6 +782,35 @@ pub mod tests {
+         assert!(!D4K.eligible_iovecs(&[iov(0x1000, 0)], 0));
+     }
+ 
++    #[test]
++    fn test_window_bounds_and_restoration() {
++        let entry = |len| libc::iovec {
++            iov_base: std::ptr::null_mut(),
++            iov_len: len,
++        };
++        let mut spans = [entry(16), entry(64), entry(8)];
++        for (limit, lengths) in [
++            (0, &[][..]),
++            (16, &[16][..]),
++            (32, &[16, 16][..]),
++            (88, &[16, 64, 8][..]),
++        ] {
++            let mut window = IoWindow::prepare(&mut spans, limit);
++            let active = window.slice(&spans);
++            assert_eq!(active.as_ptr(), spans.as_ptr());
++            assert_eq!(
++                active.iter().map(|iov| iov.iov_len).collect::<Vec<_>>(),
++                lengths
++            );
++            assert_eq!(window.bytes, lengths.iter().sum::<usize>());
++            window.restore(&mut spans);
++            assert_eq!(spans.map(|iov| iov.iov_len), [16, 64, 8]);
++        }
++        let mut many = vec![entry(1); MAX_IOVECS + 1];
++        let window = IoWindow::prepare(&mut many, MAX_IO_BYTES);
++        assert_eq!((window.entries, window.bytes), (MAX_IOVECS, MAX_IOVECS));
++    }
++
+     #[test]
+     fn test_advance_iovecs() {
+         let mut buf = [0u8; 64];
+@@ -951,6 +990,70 @@ pub mod tests {
+         assert_eq!(short_errors, 1);
+     }
+ 
++    #[test]
++    fn test_async_clipped_continuation_survives_a_refused_push() {
++        use std::os::unix::fs::FileExt;
++
++        let mem = mem_of(0x10000);
++        let spans = [
++            (GuestAddress(0), 256),
++            (GuestAddress(4096), 1024),
++            (GuestAddress(8192), 256),
++        ];
++        let payload: Vec<u8> = (0..1536).map(|i| (i / 127 + i % 11) as u8).collect();
++        for write in [true, false] {
++            let file = TempFile::new().unwrap().into_file();
++            file.write_all_at(&[0xde; 1538], 0).unwrap();
++            let mut pos = 0;
++            for (addr, len) in spans {
++                let end = pos + len as usize;
++                if write {
++                    mem.write_slice(&payload[pos..end], addr).unwrap();
++                } else {
++                    mem.write_slice(&vec![0; len as usize], addr).unwrap();
++                }
++                pos = end;
++            }
++            if !write {
++                file.write_all_at(&payload, 1).unwrap();
++            }
++            let mut engine = AsyncFileEngine::from_test_backings(file, None, false).unwrap();
++            engine.set_test_window_limit(512);
++            if write {
++                engine
++                    .push_writev(1, &mem, spans.to_vec(), PendingRequest::default())
++                    .unwrap();
++            } else {
++                engine
++                    .push_readv(1, &mem, spans.to_vec(), PendingRequest::default())
++                    .unwrap();
++            }
++            engine.drain(false).unwrap();
++            engine.fail_ring_for_test(1, 0);
++            assert!(engine.pop(&mem).is_err());
++            assert_eq!(engine.ring_failures_left_for_test(), (0, 0));
++            let result = loop {
++                engine.drain(false).unwrap();
++                if let Some(cqe) = engine.pop(&mem).unwrap() {
++                    break cqe.result().unwrap();
++                }
++            };
++            assert_eq!(result, 1536);
++            assert_eq!(engine.in_flight(), 0);
++            let mut disk = [0; 1538];
++            engine.file().read_exact_at(&mut disk, 0).unwrap();
++            assert_eq!((disk[0], disk[1537]), (0xde, 0xde));
++            assert_eq!(&disk[1..1537], payload.as_slice());
++            let mut pos = 0;
++            for (addr, len) in spans {
++                let mut data = vec![0; len as usize];
++                mem.read_slice(&mut data, addr).unwrap();
++                assert_eq!(data, &payload[pos..pos + len as usize]);
++                pos += len as usize;
++            }
++        }
++    }
++
+     #[test]
+     fn test_async_submit_failure_retains_parent_for_retry() {
+         let mem = create_mem();
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
+index 0e6c5824d..ca857b8e6 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
+@@ -11,7 +11,7 @@ use vm_memory::{GuestMemoryBackend, GuestMemoryError};
+ use crate::vstate::memory::{GuestAddress, GuestMemoryMmap};
+ 
+ use super::direct::{BounceBuf, BouncePlan, DioAlign, bounce_buf, run_sync};
+-use super::{io_window, segment_iovecs};
++use super::{IoWindow, segment_iovecs};
+ use crate::devices::virtio::block::virtio::request::DataSegment;
+ use crate::vstate::memory::GuestMemoryExtension;
+ 
+@@ -82,15 +82,15 @@ where
+     F: FnMut(&[libc::iovec], usize, i64) -> Result<usize, std::io::Error>,
+ {
+     let mut total = 0u32;
+-    let mut window = if iovecs.len() > 1 {
+-        Vec::with_capacity(iovecs.len().min(super::MAX_IOVECS))
+-    } else {
+-        Vec::new()
+-    };
+     let mut index = 0;
+     while index < iovecs.len() {
+-        let remaining = &iovecs[index..];
++        let pos = offset
++            .checked_add(u64::from(total))
++            .and_then(|x| i64::try_from(x).ok())
++            .ok_or_else(|| (std::io::Error::other("file offset overflow"), total))?;
++        let remaining = &mut iovecs[index..];
+         let single;
++        let mut window = IoWindow::default();
+         let (active, bytes) = if remaining.len() == 1 {
+             let len = remaining[0].iov_len.min(super::MAX_IO_BYTES);
+             single = libc::iovec {
+@@ -99,25 +99,20 @@ where
+             };
+             (std::slice::from_ref(&single), len)
+         } else {
+-            let bytes = io_window(remaining, &mut window);
+-            (window.as_slice(), bytes)
++            window = IoWindow::prepare(remaining, super::MAX_IO_BYTES);
++            (window.slice(remaining), window.bytes)
+         };
+-        let pos = offset
+-            .checked_add(u64::from(total))
+-            .and_then(|x| i64::try_from(x).ok())
+-            .ok_or_else(|| (std::io::Error::other("file offset overflow"), total))?;
+-        if let Some(dio) = direct
++        let result = if let Some(dio) = direct
+             && !dio.eligible_iovecs(
+                 active,
+                 u64::try_from(pos).expect("offset originated as a u64"),
+-            )
+-        {
+-            return Err((
+-                std::io::Error::other("unaligned direct I/O remainder"),
+-                total,
+-            ));
+-        }
+-        let moved = match operation(active, bytes, pos) {
++            ) {
++            Err(std::io::Error::other("unaligned direct I/O remainder"))
++        } else {
++            operation(active, bytes, pos)
++        };
++        window.restore(remaining);
++        let moved = match result {
+             Ok(moved) => moved,
+             Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+             Err(err) => return Err((err, total)),
+-- 
+2.43.0
+

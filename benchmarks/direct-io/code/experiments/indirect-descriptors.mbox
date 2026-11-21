@@ -1,0 +1,583 @@
+From 85e6a7de75b5abe9e42633254efc7384721b6838 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:27:29 +0200
+Subject: [PATCH] virtio-blk: qualify negotiated split indirect tables for
+ private boots
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/firecracker/Cargo.toml                    |   1 +
+ src/vmm/Cargo.toml                            |   1 +
+ .../src/devices/virtio/block/virtio/device.rs | 131 ++++++-----
+ .../src/devices/virtio/block/virtio/mod.rs    |  13 ++
+ .../devices/virtio/block/virtio/request.rs    | 212 +++++++++++++++---
+ src/vmm/src/devices/virtio/queue.rs           |   5 +
+ src/vmm/src/rpc_interface.rs                  |  28 +++
+ 7 files changed, 306 insertions(+), 85 deletions(-)
+
+diff --git a/src/firecracker/Cargo.toml b/src/firecracker/Cargo.toml
+index 67c84c70b..1b5b964b7 100644
+--- a/src/firecracker/Cargo.toml
++++ b/src/firecracker/Cargo.toml
+@@ -16,6 +16,7 @@ name = "firecracker"
+ bench = false
+ 
+ [features]
++block-indirect-experiment = ["vmm/block-indirect-experiment"]
+ tracing = ["log-instrument", "utils/tracing", "vmm/tracing"]
+ fuzzing = ["vmm/fuzzing"]
+ gdb = ["vmm/gdb"]
+diff --git a/src/vmm/Cargo.toml b/src/vmm/Cargo.toml
+index 36861e006..bae7e8a9c 100644
+--- a/src/vmm/Cargo.toml
++++ b/src/vmm/Cargo.toml
+@@ -9,6 +9,7 @@ license = "Apache-2.0"
+ bench = false
+ 
+ [features]
++block-indirect-experiment = []
+ default = []
+ tracing = ["log-instrument"]
+ gdb = ["gdbstub", "gdbstub_arch"]
+diff --git a/src/vmm/src/devices/virtio/block/virtio/device.rs b/src/vmm/src/devices/virtio/block/virtio/device.rs
+index f25e87e86..ea901b8dc 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/device.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/device.rs
+@@ -570,6 +570,11 @@ impl VirtioBlock {
+             avail_features |= 1u64 << VIRTIO_BLK_F_FLUSH;
+         }
+ 
++        #[cfg(feature = "block-indirect-experiment")]
++        if super::experimental_indirect_drive() == Some(std::ffi::OsStr::new(&config.drive_id)) {
++            avail_features |= super::INDIRECT_FEATURE;
++        }
++
+         if config.is_read_only {
+             avail_features |= 1u64 << VIRTIO_BLK_F_RO;
+         }
+@@ -707,75 +712,81 @@ impl VirtioBlock {
+             deferred_since = Some(hold.since);
+         }
+ 
++        let indirect = cfg!(feature = "block-indirect-experiment")
++            && self.acked_features & self.avail_features & super::INDIRECT_FEATURE != 0;
+         let queue = &mut self.queues[queue_index];
+         let mut used_any = false;
+ 
+         while let Some((head, remaining)) = queue.pop_or_enable_notification_with_remaining()? {
+             self.metrics.remaining_reqs_count.add(remaining.into());
+-            let processing_result =
+-                match Request::parse_with_status(&head, &active_state.mem, self.disk.nsectors) {
+-                    Ok(request) => {
+-                        // Admission must precede rate accounting: a request that is put back
+-                        // on the queue must not consume tokens, including burst or debt.
+-                        if let FileEngine::Async(engine) = &mut self.disk.file_engine {
+-                            match engine.can_accept() {
+-                                Ok(true) => (),
+-                                Ok(false) => {
+-                                    queue.undo_pop();
+-                                    self.is_io_engine_throttled = true;
+-                                    break;
+-                                }
+-                                Err(err) => {
+-                                    error!("Failed to check block engine capacity: {:?}", err);
+-                                    self.retry_timer.arm(Duration::from_millis(10), None);
+-                                    queue.undo_pop();
+-                                    self.is_io_engine_throttled = true;
+-                                    break;
+-                                }
++            let processing_result = match Request::parse_negotiated(
++                &head,
++                &active_state.mem,
++                self.disk.nsectors,
++                indirect,
++            ) {
++                Ok(request) => {
++                    // Admission must precede rate accounting: a request that is put back
++                    // on the queue must not consume tokens, including burst or debt.
++                    if let FileEngine::Async(engine) = &mut self.disk.file_engine {
++                        match engine.can_accept() {
++                            Ok(true) => (),
++                            Ok(false) => {
++                                queue.undo_pop();
++                                self.is_io_engine_throttled = true;
++                                break;
++                            }
++                            Err(err) => {
++                                error!("Failed to check block engine capacity: {:?}", err);
++                                self.retry_timer.arm(Duration::from_millis(10), None);
++                                queue.undo_pop();
++                                self.is_io_engine_throttled = true;
++                                break;
+                             }
+                         }
+-                        let charge = request.rate_limit_charge();
+-                        let Some(reservation) = charge.take(&mut self.rate_limiter) else {
+-                            // Stop processing the queue and return this descriptor chain to the
+-                            // avail ring, for later processing.
+-                            queue.undo_pop();
+-                            self.metrics.rate_limiter_throttled_events.inc();
+-                            break;
+-                        };
+-
+-                        let res = request.process(
+-                            &mut self.disk,
+-                            head.index,
+-                            &active_state.mem,
+-                            &self.metrics,
+-                            self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
+-                        );
+-                        if matches!(
+-                            res,
+-                            ProcessingResult::Deferred(_) | ProcessingResult::Throttled
+-                        ) {
+-                            // It goes back to the queue and is charged again when processed.
+-                            reservation.cancel();
+-                        }
+-                        res
+                     }
+-                    Err((err, status)) => {
+-                        error!("Failed to parse available descriptor chain: {:?}", err);
+-                        self.metrics.execute_fails.inc();
+-                        // The guest must not take a refused request for a success: IOERR in its
+-                        // status byte when the chain names one (`Request::parse_with_status`).
+-                        let num_bytes_to_mem = status.map_or(0, |addr| {
+-                            active_state
+-                                .mem
+-                                .write_obj(u8::try_from(VIRTIO_BLK_S_IOERR).unwrap(), addr)
+-                                .map_or(0, |()| 1)
+-                        });
+-                        ProcessingResult::Executed(FinishedRequest {
+-                            num_bytes_to_mem,
+-                            desc_idx: head.index,
+-                        })
++                    let charge = request.rate_limit_charge();
++                    let Some(reservation) = charge.take(&mut self.rate_limiter) else {
++                        // Stop processing the queue and return this descriptor chain to the
++                        // avail ring, for later processing.
++                        queue.undo_pop();
++                        self.metrics.rate_limiter_throttled_events.inc();
++                        break;
++                    };
++
++                    let res = request.process(
++                        &mut self.disk,
++                        head.index,
++                        &active_state.mem,
++                        &self.metrics,
++                        self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
++                    );
++                    if matches!(
++                        res,
++                        ProcessingResult::Deferred(_) | ProcessingResult::Throttled
++                    ) {
++                        // It goes back to the queue and is charged again when processed.
++                        reservation.cancel();
+                     }
+-                };
++                    res
++                }
++                Err((err, status)) => {
++                    error!("Failed to parse available descriptor chain: {:?}", err);
++                    self.metrics.execute_fails.inc();
++                    // The guest must not take a refused request for a success: IOERR in its
++                    // status byte when the chain names one (`Request::parse_with_status`).
++                    let num_bytes_to_mem = status.map_or(0, |addr| {
++                        active_state
++                            .mem
++                            .write_obj(u8::try_from(VIRTIO_BLK_S_IOERR).unwrap(), addr)
++                            .map_or(0, |()| 1)
++                    });
++                    ProcessingResult::Executed(FinishedRequest {
++                        num_bytes_to_mem,
++                        desc_idx: head.index,
++                    })
++                }
++            };
+ 
+             // The request that waited at the head of the queue went ahead.
+             if let ProcessingResult::Submitted | ProcessingResult::Executed(_) = processing_result
+diff --git a/src/vmm/src/devices/virtio/block/virtio/mod.rs b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+index 610b69913..ee43358be 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+@@ -20,6 +20,19 @@ pub use self::request::*;
+ pub use crate::devices::virtio::block::CacheType;
+ use crate::devices::virtio::queue::FIRECRACKER_MAX_QUEUE_SIZE;
+ 
++/// Virtio 1.2 feature bit for indirect descriptor tables.
++pub(super) const INDIRECT_FEATURE: u64 = 1 << 28;
++
++/// Select one block drive for the fresh-boot-only experiment. The environment is
++/// set before the process starts and this selection is immutable for its lifetime.
++#[cfg(feature = "block-indirect-experiment")]
++pub(crate) fn experimental_indirect_drive() -> Option<&'static std::ffi::OsStr> {
++    static DRIVE: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
++    DRIVE
++        .get_or_init(|| std::env::var_os("FC_QA_BLK_INDIRECT_DRIVE").filter(|id| !id.is_empty()))
++        .as_deref()
++}
++
+ /// Sector shift for block device.
+ pub const SECTOR_SHIFT: u8 = 9;
+ /// Size of block sector.
+diff --git a/src/vmm/src/devices/virtio/block/virtio/request.rs b/src/vmm/src/devices/virtio/block/virtio/request.rs
+index f2c6a8260..2b9871e7f 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/request.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/request.rs
+@@ -20,7 +20,7 @@ pub use crate::devices::virtio::generated::virtio_blk::{
+     VIRTIO_BLK_T_OUT,
+ };
+ use crate::devices::virtio::queue::{
+-    DescriptorChain, FIRECRACKER_MAX_QUEUE_SIZE, VIRTQ_DESC_F_NEXT,
++    Descriptor, DescriptorChain, FIRECRACKER_MAX_QUEUE_SIZE, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE,
+ };
+ use crate::logger::{IncMetric, error};
+ use crate::rate_limiter::{BudgetReservation, RateLimiter};
+@@ -415,7 +415,7 @@ impl Request {
+     }
+ 
+     /// `parse`, and on a refusal the address of the request's status byte, when the chain was
+-    /// walked to its end (no indirect table, no cycle, no readable descriptor after a writable
++    /// walked to its end (only negotiated descriptor types, no cycle, no readable descriptor after a writable
+     /// one) and its last device-writable byte (where virtio puts the status) is mapped guest
+     /// memory. The device writes `VIRTIO_BLK_S_IOERR` there: without a status byte a refused
+     /// request (out of range, a buffer outside guest memory, a bad length) could look like a
+@@ -424,58 +424,108 @@ impl Request {
+         avail_desc: &DescriptorChain,
+         mem: &GuestMemoryMmap,
+         num_disk_sectors: u64,
++    ) -> Result<Request, (VirtioBlockError, Option<GuestAddress>)> {
++        Self::parse_negotiated(avail_desc, mem, num_disk_sectors, false)
++    }
++
++    pub(super) fn parse_negotiated(
++        avail_desc: &DescriptorChain,
++        mem: &GuestMemoryMmap,
++        num_disk_sectors: u64,
++        indirect: bool,
+     ) -> Result<Request, (VirtioBlockError, Option<GuestAddress>)> {
+         let mut readable = DescriptorStream::new();
+         let mut writable = DescriptorStream::new();
+-        Self::walk(avail_desc, &mut readable, &mut writable).map_err(|err| (err, None))?;
++        Self::walk(avail_desc, mem, indirect, &mut readable, &mut writable)
++            .map_err(|err| (err, None))?;
+         let status = writable.last_byte();
+-        Self::parse_streams(&mut readable, &mut writable, mem, num_disk_sectors).map_err(|err| {
++        Self::parse_streams(
++            &mut readable,
++            &mut writable,
++            mem,
++            num_disk_sectors,
++            indirect,
++        )
++        .map_err(|err| {
+             let status = status.filter(|&addr| mem.check_range_plugged(addr, 1).is_ok());
+             (err, status)
+         })
+     }
+ 
+-    /// Copy the chain's descriptors into a readable and a writable stream.
++    /// Snapshot each traversed descriptor into the two streams. The control
++    /// descriptor of an indirect table describes metadata, not payload.
+     fn walk(
+         avail_desc: &DescriptorChain,
++        mem: &GuestMemoryMmap,
++        indirect: bool,
+         readable: &mut DescriptorStream,
+         writable: &mut DescriptorStream,
+     ) -> Result<(), VirtioBlockError> {
+-        let mut desc = *avail_desc;
++        const INDIRECT: u16 = 4;
+         let mut seen_writable = false;
+         let mut chain_len = 0u64;
+-        loop {
+-            // This device does not negotiate VIRTIO_RING_F_INDIRECT_DESC.
+-            // Never interpret an indirect table as an ordinary data buffer.
+-            if desc.flags & 0x4 != 0 {
+-                return Err(VirtioBlockError::DescriptorChainTooShort);
+-            }
+-            // A copied descriptor is the only metadata subsequently consulted. This
+-            // avoids a guest changing an already validated descriptor later in parsing.
+-            chain_len = chain_len
+-                .checked_add(u64::from(desc.len))
+-                .ok_or(VirtioBlockError::InvalidDataLength)?;
+-            // Virtio limits the total length of a descriptor chain to 2^32 bytes.
++        let mut push = |addr, len, flags| {
++            chain_len += u64::from(len);
+             if chain_len > (1u64 << 32) {
+                 return Err(VirtioBlockError::InvalidDataLength);
+             }
+-            if desc.is_write_only() {
++            if flags & VIRTQ_DESC_F_WRITE != 0 {
+                 seen_writable = true;
+-                writable.push(desc.addr, desc.len)?;
++                writable.push(addr, len)
++            } else if seen_writable {
++                Err(VirtioBlockError::UnexpectedReadOnlyDescriptor)
+             } else {
+-                if seen_writable {
+-                    return Err(VirtioBlockError::UnexpectedReadOnlyDescriptor);
++                readable.push(addr, len)
++            }
++        };
++
++        let mut desc = *avail_desc;
++        loop {
++            if desc.flags & INDIRECT != 0 {
++                if !indirect || desc.flags & VIRTQ_DESC_F_NEXT != 0 {
++                    return Err(VirtioBlockError::DescriptorChainTooShort);
++                }
++                let stride = size_of::<Descriptor>() as u32;
++                if desc.len == 0 || desc.len % stride != 0 {
++                    return Err(VirtioBlockError::InvalidDataLength);
+                 }
+-                readable.push(desc.addr, desc.len)?;
++                mem.check_range_plugged(desc.addr, desc.len as usize)
++                    .map_err(VirtioBlockError::GuestMemory)?;
++                let entries = desc.len / stride;
++                let mut index = 0u16;
++                // The original queue size bounds the work, even for a table with
++                // unused slots. A regular prefix and the table share this budget.
++                for _ in 0..desc.remaining_descriptors() {
++                    if u32::from(index) >= entries {
++                        break;
++                    }
++                    let addr = desc
++                        .addr
++                        .checked_add(u64::from(index) * u64::from(stride))
++                        .ok_or(VirtioBlockError::GuestMemory(
++                            GuestMemoryError::GuestAddressOverflow,
++                        ))?;
++                    let entry: Descriptor =
++                        mem.read_obj(addr).map_err(VirtioBlockError::GuestMemory)?;
++                    if entry.flags & INDIRECT != 0 {
++                        break;
++                    }
++                    push(GuestAddress(entry.addr), entry.len, entry.flags)?;
++                    if entry.flags & VIRTQ_DESC_F_NEXT == 0 {
++                        return Ok(());
++                    }
++                    index = entry.next;
++                }
++                return Err(VirtioBlockError::DescriptorChainTooShort);
+             }
++            push(desc.addr, desc.len, desc.flags)?;
+             if desc.flags & VIRTQ_DESC_F_NEXT == 0 {
+-                break;
++                return Ok(());
+             }
+             desc = desc
+                 .next_descriptor()
+                 .ok_or(VirtioBlockError::DescriptorChainTooShort)?;
+         }
+-        Ok(())
+     }
+ 
+     fn parse_streams(
+@@ -483,6 +533,7 @@ impl Request {
+         writable: &mut DescriptorStream,
+         mem: &GuestMemoryMmap,
+         num_disk_sectors: u64,
++        enforce_seg_max: bool,
+     ) -> Result<Request, VirtioBlockError> {
+         let mut header = [0u8; 16];
+         readable.read(mem, &mut header)?;
+@@ -499,7 +550,14 @@ impl Request {
+ 
+         // Construct region-contained payload spans and validate them all before the
+         // first host I/O. Keep the common one-span path allocation-free.
++        let mut payload_descriptors = 0;
+         let mut push_span = |addr: GuestAddress, len: u32| -> Result<(), VirtioBlockError> {
++            if enforce_seg_max {
++                payload_descriptors += 1;
++                if payload_descriptors > super::SEG_MAX {
++                    return Err(VirtioBlockError::UnexpectedDataDescriptors);
++                }
++            }
+             mem.try_for_each_region_in_range(addr, len as usize, |region, offset, n| {
+                 region.check_range_plugged(offset, n)?;
+                 let base = region
+@@ -1260,6 +1318,110 @@ mod tests {
+         ));
+     }
+ 
++    #[test]
++    fn indirect_table_parses_scattered_payload_and_keeps_outer_head() {
++        let mem = single_region_mem(0x80000);
++        let vq = VirtQueue::new(GuestAddress(0x70000), &mem, 256);
++        let table_addr = GuestAddress(0x60000);
++        for count in [1, 32, 33] {
++            let segments = multi_chain(&vq, VIRTIO_BLK_T_IN, 0, &vec![(512, true); count]);
++            vq.dtable[count + 1].addr.set(0x5f000);
++            let length = (count + 2) * size_of::<Descriptor>();
++            // Copy a normally constructed Linux-style table outside the main ring.
++            let mut bytes = vec![0; length];
++            mem.read_slice(&mut bytes, vq.dtable_start()).unwrap();
++            mem.write_slice(&bytes, table_addr).unwrap();
++            vq.dtable[211].set(table_addr.0, length as u32, 4 | VIRTQ_DESC_F_WRITE, 0);
++            vq.avail.ring[0].set(211);
++            let mut q = vq.create_queue();
++            let head = q.pop().unwrap().unwrap();
++            assert!(Request::parse_negotiated(&head, &mem, NUM_DISK_SECTORS, false).is_err());
++            let result = Request::parse_negotiated(&head, &mem, NUM_DISK_SECTORS, true);
++            if count == 33 {
++                assert!(matches!(
++                    result,
++                    Err((
++                        VirtioBlockError::UnexpectedDataDescriptors,
++                        Some(GuestAddress(0x5f000))
++                    ))
++                ));
++            } else {
++                let req = result.unwrap();
++                assert_eq!(req.data_len, (count * 512) as u32);
++                assert_eq!(req.data_addr, segments[0].0);
++                if count == 1 {
++                    assert!(req.segments.is_empty());
++                } else {
++                    assert_eq!(req.segments, segments);
++                }
++                assert_eq!(req.to_pending_request(head.index).desc_idx, 211);
++            }
++        }
++    }
++
++    #[test]
++    fn indirect_table_after_direct_prefix_preserves_flush_and_status() {
++        let mem = single_region_mem(0x20000);
++        let vq = VirtQueue::new(GuestAddress(0), &mem, 8);
++        mem.write_obj(
++            RequestHeader::new(VIRTIO_BLK_T_FLUSH, 0),
++            GuestAddress(0x1000),
++        )
++        .unwrap();
++        vq.dtable[3].set(0x1000, 16, VIRTQ_DESC_F_NEXT, 7);
++        vq.dtable[7].set(0x3000, 16, 4 | VIRTQ_DESC_F_WRITE, 0);
++        let status = Descriptor {
++            addr: 0x4000,
++            len: 1,
++            flags: VIRTQ_DESC_F_WRITE,
++            next: 0,
++        };
++        mem.write_obj(status, GuestAddress(0x3000)).unwrap();
++        vq.avail.ring[0].set(3);
++        vq.avail.idx.set(1);
++        let mut q = vq.create_queue();
++        let head = q.pop().unwrap().unwrap();
++        let req = Request::parse_negotiated(&head, &mem, NUM_DISK_SECTORS, true).unwrap();
++        assert_eq!(req.r#type, RequestType::Flush);
++        assert_eq!(req.data_len, 0);
++        assert_eq!(req.status_addr, GuestAddress(0x4000));
++        assert_eq!(req.to_pending_request(head.index).desc_idx, 3);
++    }
++
++    #[test]
++    fn indirect_table_rejects_unsupported_layouts_before_status() {
++        let mem = single_region_mem(0x20000);
++        let vq = VirtQueue::new(GuestAddress(0), &mem, 8);
++        vq.avail.ring[0].set(0);
++        vq.avail.idx.set(1);
++        let check = |addr, len, flags, entry_flags, next| {
++            vq.dtable[0].set(addr, len, flags, 1);
++            mem.write_obj(
++                Descriptor {
++                    addr: 0x1000,
++                    len: 16,
++                    flags: entry_flags,
++                    next,
++                },
++                GuestAddress(0x3000),
++            )
++            .unwrap();
++            let mut q = vq.create_queue();
++            let head = q.pop().unwrap().unwrap();
++            assert!(matches!(
++                Request::parse_negotiated(&head, &mem, NUM_DISK_SECTORS, true),
++                Err((_, None))
++            ));
++        };
++        check(0x3000, 0, 4, 0, 0);
++        check(0x3000, 15, 4, 0, 0);
++        check(0x3000, 16, 4 | VIRTQ_DESC_F_NEXT, 0, 0);
++        check(0x3000, 16, 4, 4, 0);
++        check(0x3000, 16, 4, VIRTQ_DESC_F_NEXT, 1);
++        check(0x3000, 16, 4, VIRTQ_DESC_F_NEXT, 0);
++        check(0x20000 - 8, 16, 4, 0, 0);
++    }
++
+     #[test]
+     fn test_descriptor_stream_capacity() {
+         let mut stream = DescriptorStream::new();
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 3621735d5..ae70b045a 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -138,6 +138,11 @@ impl DescriptorChain {
+         if chain.is_valid() { Some(chain) } else { None }
+     }
+ 
++    /// Number of descriptor positions left after any already walked direct prefix.
++    pub(super) fn remaining_descriptors(&self) -> u16 {
++        self.ttl
++    }
++
+     fn is_valid(&self) -> bool {
+         !self.has_next() || self.next < self.queue_size
+     }
+diff --git a/src/vmm/src/rpc_interface.rs b/src/vmm/src/rpc_interface.rs
+index 9e8087ccb..0a4578248 100644
+--- a/src/vmm/src/rpc_interface.rs
++++ b/src/vmm/src/rpc_interface.rs
+@@ -175,6 +175,28 @@ pub enum VmmAction {
+     GetMigrationMemoryDigest,
+ }
+ 
++#[cfg(feature = "block-indirect-experiment")]
++impl VmmAction {
++    fn reject_indirect_state_transfer(&self) -> Result<(), VmmActionError> {
++        use crate::devices::virtio::block::virtio::experimental_indirect_drive;
++        if matches!(
++            self,
++            Self::CreateSnapshot(_)
++                | Self::LoadSnapshot(_)
++                | Self::GetMigration
++                | Self::MigrationSendRound(_)
++                | Self::MigrationReceiveRound(_)
++                | Self::GetMigrationMemoryDigest
++        ) && experimental_indirect_drive().is_some()
++        {
++            return Err(VmmActionError::NotSupported(
++                "private block indirect experiment disables snapshots and migration".into(),
++            ));
++        }
++        Ok(())
++    }
++}
++
+ /// Wrapper for all errors associated with VMM actions.
+ #[derive(Debug, thiserror::Error, displaydoc::Display)]
+ pub enum VmmActionError {
+@@ -471,6 +493,9 @@ impl<'a> PrebootApiController<'a> {
+         &mut self,
+         request: VmmAction,
+     ) -> Result<VmmData, VmmActionError> {
++        #[cfg(feature = "block-indirect-experiment")]
++        request.reject_indirect_state_transfer()?;
++
+         use self::VmmAction::*;
+ 
+         match request {
+@@ -776,6 +801,9 @@ impl RuntimeApiController {
+         request: VmmAction,
+         event_manager: &mut EventManager,
+     ) -> Result<VmmData, VmmActionError> {
++        #[cfg(feature = "block-indirect-experiment")]
++        request.reject_indirect_state_transfer()?;
++
+         use self::VmmAction::*;
+         match request {
+             // Supported operations allowed post-boot.
+-- 
+2.43.0
+

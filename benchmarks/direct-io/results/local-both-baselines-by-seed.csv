@@ -1,0 +1,193 @@
+build,case,phase,seed,stock,two_open_direct,outcome
+one-open-b22,mix4,measured,61441,split,ahead,other
+one-open-b22,mix4,measured,61442,split,split,other
+one-open-b22,mix4,measured,61443,split,split,other
+one-open-b22,mix4,measured,61444,ahead,split,other
+one-open-b22,mix512,measured,61441,split,ahead,other
+one-open-b22,mix512,measured,61442,split,behind,other
+one-open-b22,mix512,measured,61443,split,ahead,other
+one-open-b22,mix512,measured,61444,split,split,other
+one-open-b22,mix64,measured,61441,ahead,split,other
+one-open-b22,mix64,measured,61442,ahead,behind,other
+one-open-b22,mix64,measured,61443,ahead,behind,other
+one-open-b22,mix64,measured,61444,split,split,other
+one-open-b22,mix8,measured,61441,ahead,behind,other
+one-open-b22,mix8,measured,61442,ahead,ahead,ahead of both
+one-open-b22,mix8,measured,61443,ahead,ahead,ahead of both
+one-open-b22,mix8,measured,61444,split,ahead,other
+one-open-b22,read4,cold,61441,behind,behind,behind both
+one-open-b22,read4,cold,61442,ahead,behind,other
+one-open-b22,read4,cold,61443,behind,ahead,other
+one-open-b22,read4,cold,61444,behind,ahead,other
+one-open-b22,read4,repeat,61441,behind,behind,behind both
+one-open-b22,read4,repeat,61442,split,split,other
+one-open-b22,read4,repeat,61443,behind,ahead,other
+one-open-b22,read4,repeat,61444,behind,behind,behind both
+one-open-b22,read512,cold,61441,ahead,ahead,ahead of both
+one-open-b22,read512,cold,61442,ahead,ahead,ahead of both
+one-open-b22,read512,cold,61443,ahead,behind,other
+one-open-b22,read512,cold,61444,ahead,ahead,ahead of both
+one-open-b22,read512,repeat,61441,behind,behind,behind both
+one-open-b22,read512,repeat,61442,behind,ahead,other
+one-open-b22,read512,repeat,61443,behind,behind,behind both
+one-open-b22,read512,repeat,61444,behind,split,other
+one-open-b22,txn4_batch,measured,61441,split,behind,other
+one-open-b22,txn4_batch,measured,61442,split,ahead,other
+one-open-b22,txn4_batch,measured,61443,split,behind,other
+one-open-b22,txn4_batch,measured,61444,split,ahead,other
+one-open-b22,txn4_sync,measured,61441,ahead,split,other
+one-open-b22,txn4_sync,measured,61442,ahead,behind,other
+one-open-b22,txn4_sync,measured,61443,ahead,behind,other
+one-open-b22,txn4_sync,measured,61444,behind,behind,behind both
+one-open-b22,write1m,measured,61441,ahead,behind,other
+one-open-b22,write1m,measured,61442,split,ahead,other
+one-open-b22,write1m,measured,61443,split,split,other
+one-open-b22,write1m,measured,61444,split,behind,other
+one-open-b22,write4,measured,61441,split,behind,other
+one-open-b22,write4,measured,61442,ahead,ahead,ahead of both
+one-open-b22,write4,measured,61443,ahead,split,other
+one-open-b22,write4,measured,61444,ahead,ahead,ahead of both
+one-open-b22-fixed,mix4,measured,61441,split,behind,other
+one-open-b22-fixed,mix4,measured,61442,ahead,behind,other
+one-open-b22-fixed,mix4,measured,61443,split,split,other
+one-open-b22-fixed,mix4,measured,61444,ahead,split,other
+one-open-b22-fixed,mix512,measured,61441,split,ahead,other
+one-open-b22-fixed,mix512,measured,61442,split,split,other
+one-open-b22-fixed,mix512,measured,61443,split,split,other
+one-open-b22-fixed,mix512,measured,61444,split,behind,other
+one-open-b22-fixed,mix64,measured,61441,split,behind,other
+one-open-b22-fixed,mix64,measured,61442,split,behind,other
+one-open-b22-fixed,mix64,measured,61443,ahead,behind,other
+one-open-b22-fixed,mix64,measured,61444,split,split,other
+one-open-b22-fixed,mix8,measured,61441,split,behind,other
+one-open-b22-fixed,mix8,measured,61442,ahead,behind,other
+one-open-b22-fixed,mix8,measured,61443,ahead,ahead,ahead of both
+one-open-b22-fixed,mix8,measured,61444,split,split,other
+one-open-b22-fixed,read4,cold,61441,behind,split,other
+one-open-b22-fixed,read4,cold,61442,ahead,ahead,ahead of both
+one-open-b22-fixed,read4,cold,61443,behind,ahead,other
+one-open-b22-fixed,read4,cold,61444,split,split,other
+one-open-b22-fixed,read4,repeat,61441,behind,split,other
+one-open-b22-fixed,read4,repeat,61442,behind,behind,behind both
+one-open-b22-fixed,read4,repeat,61443,behind,ahead,other
+one-open-b22-fixed,read4,repeat,61444,behind,split,other
+one-open-b22-fixed,read512,cold,61441,ahead,ahead,ahead of both
+one-open-b22-fixed,read512,cold,61442,ahead,behind,other
+one-open-b22-fixed,read512,cold,61443,ahead,ahead,ahead of both
+one-open-b22-fixed,read512,cold,61444,ahead,split,other
+one-open-b22-fixed,read512,repeat,61441,behind,behind,behind both
+one-open-b22-fixed,read512,repeat,61442,behind,ahead,other
+one-open-b22-fixed,read512,repeat,61443,behind,ahead,other
+one-open-b22-fixed,read512,repeat,61444,behind,ahead,other
+one-open-b22-fixed,txn4_batch,measured,61441,split,behind,other
+one-open-b22-fixed,txn4_batch,measured,61442,split,ahead,other
+one-open-b22-fixed,txn4_batch,measured,61443,split,behind,other
+one-open-b22-fixed,txn4_batch,measured,61444,behind,ahead,other
+one-open-b22-fixed,txn4_sync,measured,61441,ahead,behind,other
+one-open-b22-fixed,txn4_sync,measured,61442,behind,behind,behind both
+one-open-b22-fixed,txn4_sync,measured,61443,split,behind,other
+one-open-b22-fixed,txn4_sync,measured,61444,ahead,ahead,ahead of both
+one-open-b22-fixed,write1m,measured,61441,ahead,behind,other
+one-open-b22-fixed,write1m,measured,61442,split,ahead,other
+one-open-b22-fixed,write1m,measured,61443,split,split,other
+one-open-b22-fixed,write1m,measured,61444,ahead,behind,other
+one-open-b22-fixed,write4,measured,61441,ahead,behind,other
+one-open-b22-fixed,write4,measured,61442,ahead,ahead,ahead of both
+one-open-b22-fixed,write4,measured,61443,split,behind,other
+one-open-b22-fixed,write4,measured,61444,ahead,ahead,ahead of both
+one-open-rc1,mix4,measured,61441,split,split,other
+one-open-rc1,mix4,measured,61442,split,behind,other
+one-open-rc1,mix4,measured,61443,split,split,other
+one-open-rc1,mix4,measured,61444,ahead,split,other
+one-open-rc1,mix512,measured,61441,split,split,other
+one-open-rc1,mix512,measured,61442,split,split,other
+one-open-rc1,mix512,measured,61443,split,behind,other
+one-open-rc1,mix512,measured,61444,split,behind,other
+one-open-rc1,mix64,measured,61441,split,behind,other
+one-open-rc1,mix64,measured,61442,split,behind,other
+one-open-rc1,mix64,measured,61443,split,behind,other
+one-open-rc1,mix64,measured,61444,ahead,split,other
+one-open-rc1,mix8,measured,61441,split,split,other
+one-open-rc1,mix8,measured,61442,split,behind,other
+one-open-rc1,mix8,measured,61443,split,split,other
+one-open-rc1,mix8,measured,61444,split,ahead,other
+one-open-rc1,read4,cold,61441,behind,behind,behind both
+one-open-rc1,read4,cold,61442,ahead,split,other
+one-open-rc1,read4,cold,61443,behind,ahead,other
+one-open-rc1,read4,cold,61444,split,split,other
+one-open-rc1,read4,repeat,61441,behind,ahead,other
+one-open-rc1,read4,repeat,61442,split,behind,other
+one-open-rc1,read4,repeat,61443,behind,ahead,other
+one-open-rc1,read4,repeat,61444,behind,behind,behind both
+one-open-rc1,read512,cold,61441,ahead,split,other
+one-open-rc1,read512,cold,61442,ahead,behind,other
+one-open-rc1,read512,cold,61443,ahead,behind,other
+one-open-rc1,read512,cold,61444,ahead,behind,other
+one-open-rc1,read512,repeat,61441,behind,behind,behind both
+one-open-rc1,read512,repeat,61442,behind,behind,behind both
+one-open-rc1,read512,repeat,61443,behind,ahead,other
+one-open-rc1,read512,repeat,61444,behind,ahead,other
+one-open-rc1,txn4_batch,measured,61441,split,behind,other
+one-open-rc1,txn4_batch,measured,61442,split,ahead,other
+one-open-rc1,txn4_batch,measured,61443,split,ahead,other
+one-open-rc1,txn4_batch,measured,61444,split,ahead,other
+one-open-rc1,txn4_sync,measured,61441,behind,behind,behind both
+one-open-rc1,txn4_sync,measured,61442,behind,behind,behind both
+one-open-rc1,txn4_sync,measured,61443,split,behind,other
+one-open-rc1,txn4_sync,measured,61444,ahead,ahead,ahead of both
+one-open-rc1,write1m,measured,61441,ahead,behind,other
+one-open-rc1,write1m,measured,61442,split,behind,other
+one-open-rc1,write1m,measured,61443,split,behind,other
+one-open-rc1,write1m,measured,61444,ahead,behind,other
+one-open-rc1,write4,measured,61441,split,split,other
+one-open-rc1,write4,measured,61442,ahead,ahead,ahead of both
+one-open-rc1,write4,measured,61443,ahead,behind,other
+one-open-rc1,write4,measured,61444,ahead,split,other
+pr-direct-sg1,mix4,measured,61441,split,behind,other
+pr-direct-sg1,mix4,measured,61442,split,behind,other
+pr-direct-sg1,mix4,measured,61443,split,split,other
+pr-direct-sg1,mix4,measured,61444,ahead,ahead,ahead of both
+pr-direct-sg1,mix512,measured,61441,split,split,other
+pr-direct-sg1,mix512,measured,61442,split,behind,other
+pr-direct-sg1,mix512,measured,61443,split,ahead,other
+pr-direct-sg1,mix512,measured,61444,split,split,other
+pr-direct-sg1,mix64,measured,61441,split,behind,other
+pr-direct-sg1,mix64,measured,61442,ahead,behind,other
+pr-direct-sg1,mix64,measured,61443,split,behind,other
+pr-direct-sg1,mix64,measured,61444,ahead,split,other
+pr-direct-sg1,mix8,measured,61441,split,split,other
+pr-direct-sg1,mix8,measured,61442,split,behind,other
+pr-direct-sg1,mix8,measured,61443,split,ahead,other
+pr-direct-sg1,mix8,measured,61444,split,ahead,other
+pr-direct-sg1,read4,cold,61441,behind,split,other
+pr-direct-sg1,read4,cold,61442,ahead,split,other
+pr-direct-sg1,read4,cold,61443,ahead,ahead,ahead of both
+pr-direct-sg1,read4,cold,61444,split,split,other
+pr-direct-sg1,read4,repeat,61441,behind,ahead,other
+pr-direct-sg1,read4,repeat,61442,behind,behind,behind both
+pr-direct-sg1,read4,repeat,61443,behind,ahead,other
+pr-direct-sg1,read4,repeat,61444,behind,behind,behind both
+pr-direct-sg1,read512,cold,61441,ahead,ahead,ahead of both
+pr-direct-sg1,read512,cold,61442,ahead,ahead,ahead of both
+pr-direct-sg1,read512,cold,61443,ahead,behind,other
+pr-direct-sg1,read512,cold,61444,ahead,split,other
+pr-direct-sg1,read512,repeat,61441,behind,behind,behind both
+pr-direct-sg1,read512,repeat,61442,behind,ahead,other
+pr-direct-sg1,read512,repeat,61443,behind,ahead,other
+pr-direct-sg1,read512,repeat,61444,behind,ahead,other
+pr-direct-sg1,txn4_batch,measured,61441,split,behind,other
+pr-direct-sg1,txn4_batch,measured,61442,split,ahead,other
+pr-direct-sg1,txn4_batch,measured,61443,ahead,ahead,ahead of both
+pr-direct-sg1,txn4_batch,measured,61444,behind,split,other
+pr-direct-sg1,txn4_sync,measured,61441,behind,behind,behind both
+pr-direct-sg1,txn4_sync,measured,61442,behind,behind,behind both
+pr-direct-sg1,txn4_sync,measured,61443,ahead,behind,other
+pr-direct-sg1,txn4_sync,measured,61444,behind,behind,behind both
+pr-direct-sg1,write1m,measured,61441,ahead,behind,other
+pr-direct-sg1,write1m,measured,61442,split,behind,other
+pr-direct-sg1,write1m,measured,61443,split,ahead,other
+pr-direct-sg1,write1m,measured,61444,split,behind,other
+pr-direct-sg1,write4,measured,61441,ahead,behind,other
+pr-direct-sg1,write4,measured,61442,ahead,ahead,ahead of both
+pr-direct-sg1,write4,measured,61443,ahead,ahead,ahead of both
+pr-direct-sg1,write4,measured,61444,ahead,ahead,ahead of both

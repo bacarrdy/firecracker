@@ -1,0 +1,49 @@
+build,case,phase,stock,two_open_direct,outcome
+one-open-b22,mix4,measured,split,split,other
+one-open-b22,mix512,measured,split,ahead,other
+one-open-b22,mix64,measured,ahead,behind,other
+one-open-b22,mix8,measured,ahead,ahead,ahead of both
+one-open-b22,read4,cold,behind,split,other
+one-open-b22,read4,repeat,behind,behind,behind both
+one-open-b22,read512,cold,ahead,ahead,ahead of both
+one-open-b22,read512,repeat,behind,behind,behind both
+one-open-b22,txn4_batch,measured,split,split,other
+one-open-b22,txn4_sync,measured,ahead,behind,other
+one-open-b22,write1m,measured,ahead,behind,other
+one-open-b22,write4,measured,ahead,ahead,ahead of both
+one-open-b22-fixed,mix4,measured,split,split,other
+one-open-b22-fixed,mix512,measured,split,split,other
+one-open-b22-fixed,mix64,measured,split,behind,other
+one-open-b22-fixed,mix8,measured,ahead,split,other
+one-open-b22-fixed,read4,cold,split,ahead,other
+one-open-b22-fixed,read4,repeat,behind,split,other
+one-open-b22-fixed,read512,cold,ahead,ahead,ahead of both
+one-open-b22-fixed,read512,repeat,behind,split,other
+one-open-b22-fixed,txn4_batch,measured,split,ahead,other
+one-open-b22-fixed,txn4_sync,measured,split,behind,other
+one-open-b22-fixed,write1m,measured,ahead,behind,other
+one-open-b22-fixed,write4,measured,ahead,split,other
+one-open-rc1,mix4,measured,split,split,other
+one-open-rc1,mix512,measured,split,behind,other
+one-open-rc1,mix64,measured,split,behind,other
+one-open-rc1,mix8,measured,split,split,other
+one-open-rc1,read4,cold,split,ahead,other
+one-open-rc1,read4,repeat,behind,split,other
+one-open-rc1,read512,cold,ahead,split,other
+one-open-rc1,read512,repeat,behind,split,other
+one-open-rc1,txn4_batch,measured,split,split,other
+one-open-rc1,txn4_sync,measured,behind,behind,behind both
+one-open-rc1,write1m,measured,split,behind,other
+one-open-rc1,write4,measured,ahead,behind,other
+pr-direct-sg1,mix4,measured,split,split,other
+pr-direct-sg1,mix512,measured,split,split,other
+pr-direct-sg1,mix64,measured,split,behind,other
+pr-direct-sg1,mix8,measured,split,split,other
+pr-direct-sg1,read4,cold,behind,ahead,other
+pr-direct-sg1,read4,repeat,behind,behind,behind both
+pr-direct-sg1,read512,cold,ahead,ahead,ahead of both
+pr-direct-sg1,read512,repeat,behind,split,other
+pr-direct-sg1,txn4_batch,measured,split,split,other
+pr-direct-sg1,txn4_sync,measured,behind,behind,behind both
+pr-direct-sg1,write1m,measured,split,behind,other
+pr-direct-sg1,write4,measured,ahead,ahead,ahead of both

@@ -1,0 +1,1441 @@
+build,comparator,comparison,case,phase,seed,read_speed_pct,read_p99_pct,write_speed_pct,write_p99_pct,outcome
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61441,11.276439790610283,-6.134969325153373,11.27643979061026,-4.1958041958041985,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61442,3.709889992372828,5.755395683453246,3.709889992372828,10.373443983402497,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61443,0.00923321137191735,-6.134969325153373,0.00923321137191735,-5.594405594405593,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61444,-2.6598926088785446,-2.4844720496894457,-2.6598926088785446,2.962962962962945,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61441,0.3061858654903604,3.3519553072625774,0.3061858654903604,27.329192546583837,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61442,-7.220942401116726,12.03319502074689,-7.220942401116726,64.42953020134227,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61443,-0.7007526851108725,-36.86274509803922,-0.7007526851108614,-61.374407582938396,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61444,-0.39973005982456566,-19.62962962962963,-0.39973005982455456,-34.30962343096235,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61441,9.344795523457572,-13.8728323699422,9.344795523457572,-17.132867132867137,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61442,9.591038243356632,-64.8471615720524,9.591038243356632,-8.81057268722467,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61443,-1.012272504159084,-9.248554913294804,-1.012272504159073,-6.390977443609036,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61444,0.07357608283484751,-0.9478672985781977,0.07357608283482531,-6.9651741293532465,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61441,-8.798728575845061,-7.881773399014779,-8.798728575845061,10.370370370370363,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61442,4.98364380314853,-9.661835748792269,4.98364380314853,-11.034482758620701,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61443,0.5484415256606257,-7.179487179487176,0.5484415256606257,-5.0632911392405,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61444,15.39119950616068,18.7793427230047,15.39119950616068,-12.589928057553957,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,cold,61441,-3.707224262139619,-1.3071895424836555,,,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,cold,61442,-17.234262217167608,21.91235059760959,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,cold,61443,-12.262357474261886,12.86549707602338,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,cold,61444,18.630751920333832,6.779661016949157,,,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61441,-1.5194683009647103,6.802721088435382,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61442,10.349127300025573,-3.007518796992492,,,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61443,-1.9886363373476712,3.1746031746031633,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61444,3.3203127709683145,20.33898305084747,,,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,cold,61441,-10.874200415482594,-12.758620689655164,,,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,cold,61442,47.065727710658976,-23.03664921465969,,,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,cold,61443,-2.590090088593211,10.548523206751081,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,cold,61444,-0.1071811416322177,-3.351955307262555,,,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61441,22.098890022684593,-28.108108108108098,,,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61442,8.462455298857318,-6.369426751592355,,,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61443,-49.17095483290619,255.8620689655172,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61444,-24.52130945061185,29.01554404145077,,,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61441,,,0.626715531855937,7.64588840832876,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61442,,,-3.600675630214112,-6.152571869968638,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61443,,,-0.09759996672312754,8.422731876069879,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61444,,,0.8698389023606978,4.758810824099613,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61441,,,3.4764169571536163,-2.640165739577871,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61442,,,9.92881955672349,-5.389052783969972,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61443,,,5.340879589331071,-6.384651824945231,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61444,,,-4.317330021113075,4.210722469362538,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61441,,,16.6776189799158,21.935483870967754,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61442,,,29.182656616193945,-31.674208144796378,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61443,,,-29.087012995144512,7.804878048780495,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61444,,,-3.045446994318768,312.03007518796994,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write4,measured,61441,,,5.635476007636653,17.68707482993197,split
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write4,measured,61442,,,-5.8771664427308306,9.022556390977442,behind
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write4,measured,61443,,,19.464925696979552,-24.04371584699454,ahead
+one-open-b22,one-open-b22-fixed,"cross-session, same seed",write4,measured,61444,,,16.215683200585772,-4.316546762589912,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix4,measured,61441,-17.17459513950982,-19.895287958115183,-17.17459513950984,-21.71428571428572,split
+one-open-b22,one-open-rc1,"cross-session, same seed",mix4,measured,61442,26.391248732127192,-70.0,26.391248732127217,-5.673758865248235,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix4,measured,61443,-5.800161655242464,0.0,-5.800161655242475,1.5037593984962294,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",mix4,measured,61444,-2.7727200249199946,6.802721088435382,-2.7727200249199946,7.751937984496116,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",mix512,measured,61441,31.162290244619562,-59.25110132158591,31.162290244619562,-37.11656441717792,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix512,measured,61442,-6.240871831565464,30.434782608695656,-6.240871831565464,78.83211678832116,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",mix512,measured,61443,125.3179430770814,-74.68553459119495,125.31794307708144,-79.52261306532662,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix512,measured,61444,23.485414062925237,-29.084967320261445,23.485414062925237,-67.6954732510288,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix64,measured,61441,37.78553161666556,-70.08032128514057,37.78553161666554,-57.97872340425532,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix64,measured,61442,19.674440350370382,-35.85657370517927,19.67444035037036,-6.334841628959287,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix64,measured,61443,-9.255594121148903,-50.62893081761006,-9.255594121148903,15.81395348837209,split
+one-open-b22,one-open-rc1,"cross-session, same seed",mix64,measured,61444,0.6108831481735022,138.8571428571429,0.61088314817348,-16.143497757847534,split
+one-open-b22,one-open-rc1,"cross-session, same seed",mix8,measured,61441,-8.570651426008592,-79.93562231759657,-8.570651426008592,18.72509960159363,split
+one-open-b22,one-open-rc1,"cross-session, same seed",mix8,measured,61442,15.47188779289408,-11.374407582938396,15.471887792894057,-11.034482758620701,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix8,measured,61443,21.53640548844351,-80.41125541125541,21.53640548844351,-8.906882591093112,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",mix8,measured,61444,0.11175846441446868,32.460732984293195,0.11175846441446868,-11.31386861313869,split
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,cold,61441,0.9505705798816821,-2.580645161290318,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,cold,61442,-14.241485964601441,10.07194244604317,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,cold,61443,-17.0152089718315,10.285714285714299,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,cold,61444,19.191919443681083,11.834319526627235,,,split
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,repeat,61441,-12.25071223796348,11.347517730496449,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,repeat,61442,7.605985284739281,-5.839416058394164,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,repeat,61443,-6.534091051151469,11.428571428571432,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",read4,repeat,61444,29.19921920387023,10.362694300518127,,,split
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,cold,61441,33.47547976203691,-23.33333333333333,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,cold,61442,16.19718309437108,-7.547169811320753,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,cold,61443,2.815315309881261,2.7450980392156987,,,split
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,cold,61444,20.15005357764379,-4.41988950276243,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,repeat,61441,27.547931389183212,-28.877005347593578,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,repeat,61442,141.477950008267,-69.24686192468619,,,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,repeat,61443,-48.82790165887669,304.70588235294116,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",read512,repeat,61444,-50.46324891351509,74.1258741258741,,,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61441,,,3.534449225178249,3.2682432856285137,split
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61442,,,1.6285969071759832,-11.422648536593938,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61443,,,-3.5129053470879357,12.471876685074657,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61444,,,-4.891382513251896,4.916331788644346,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61441,,,16.34236068461057,-17.937774115483574,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61442,,,22.979647030284124,-10.41107026058048,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61443,,,5.235046658113363,-2.901844278484189,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61444,,,-7.7793790552083575,4.735523732391966,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",write1m,measured,61441,,,98.03995760285373,-62.04819277108433,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",write1m,measured,61442,,,184.7036946239646,-63.8755980861244,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",write1m,measured,61443,,,-28.725328930266404,-5.957446808510635,split
+one-open-b22,one-open-rc1,"cross-session, same seed",write1m,measured,61444,,,-46.56794845504909,589.308176100629,behind
+one-open-b22,one-open-rc1,"cross-session, same seed",write4,measured,61441,,,-10.565084219132448,-4.41988950276243,split
+one-open-b22,one-open-rc1,"cross-session, same seed",write4,measured,61442,,,11.39936724033661,-2.684563758389258,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",write4,measured,61443,,,8.514552351186833,-9.150326797385633,ahead
+one-open-b22,one-open-rc1,"cross-session, same seed",write4,measured,61444,,,25.78179734394126,-15.286624203821653,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix4,measured,61441,11.517732288359062,-6.134969325153373,11.517732288359062,-5.517241379310345,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix4,measured,61442,19.522926970218446,-8.695652173913048,19.522926970218467,-8.275862068965512,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix4,measured,61443,-11.317747092314,2.68456375838928,-11.317747092314024,1.5037593984962294,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix4,measured,61444,-3.2452757105267516,-2.4844720496894457,-3.2452757105267627,-4.137931034482767,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix512,measured,61441,10.18117419986131,-52.56410256410257,10.18117419986131,-57.818930041152264,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix512,measured,61442,22.906733633507457,-5.594405594405593,22.906733633507482,-49.170124481327804,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix512,measured,61443,7.744227623980748,-19.09547738693468,7.744227623980748,-6.8571428571428505,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix512,measured,61444,-0.36176774792252564,-2.6905829596412634,-0.36176774792251454,6.802721088435382,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix64,measured,61441,19.26887889969182,-67.18061674008811,19.2688788996918,-54.06976744186047,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix64,measured,61442,9.989111055123722,-1.2269938650306678,9.989111055123722,-4.608294930875578,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix64,measured,61443,8.353638713748746,-58.02139037433155,8.353638713748746,14.746543778801847,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix64,measured,61444,0.5431555987782,176.82119205298014,0.5431555987782,0.0,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix8,measured,61441,-12.993835455976777,-10.526315789473696,-12.993835455976777,-1.324503311258296,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix8,measured,61442,14.579460049373626,-13.824884792626724,14.579460049373626,-14.569536423841068,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix8,measured,61443,11.233163073695263,-9.950248756218905,11.233163073695263,-15.413533834586469,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",mix8,measured,61444,5.302282075276588,27.135678391959807,5.30228207527661,-8.646616541353392,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,cold,61441,-11.882129312362588,-26.341463414634138,,,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,cold,61442,-8.875128854015768,23.886639676113376,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,cold,61443,-24.619771790387247,16.96969696969697,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,cold,61444,17.171717152074727,5.586592178770955,,,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,repeat,61441,-11.301044708724572,9.790209790209792,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,repeat,61442,51.995013059401174,-35.17587939698493,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,repeat,61443,-0.6628788700320243,0.0,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read4,repeat,61444,31.44531257443013,0.0,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,cold,61441,-7.036247341161661,-8.992805755395672,,,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,cold,61442,11.150234753507316,-3.9215686274509887,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,cold,61443,6.756756746913695,-2.962962962962956,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,cold,61444,6.323687012540735,-15.609756097560968,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,repeat,61441,16.246215937509902,-14.193548387096765,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,repeat,61442,13.468414789353655,-5.161290322580648,,,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,repeat,61443,-42.71012006564941,251.0204081632653,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",read512,repeat,61444,-45.33662754065267,45.61403508771929,,,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61441,,,3.6783937244101894,-1.2705729144355193,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61442,,,10.805196117632088,-7.200176691452553,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61443,,,-20.263378165776768,29.950051023148404,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61444,,,4.988509247763018,-6.41231792546807,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61441,,,10.231132725044723,-6.633275009097261,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61442,,,7.958115789096132,-6.798455965174332,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61443,,,0.30469290996204546,0.006506447835707974,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61444,,,3.0089738836794444,-2.917052514942098,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write1m,measured,61441,,,0.5870581322543256,15.95092024539877,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write1m,measured,61442,,,107.41183078453953,-52.51572327044025,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write1m,measured,61443,,,-44.26238641304061,56.73758865248226,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write1m,measured,61444,,,1.042123651828497,100.0,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write4,measured,61441,,,-4.885230640993465,20.97902097902098,behind
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write4,measured,61442,,,0.2248708231183727,0.0,ahead
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write4,measured,61443,,,-14.113590255355424,-2.7972027972028135,split
+one-open-b22,pr-direct-sg1,"cross-session, same seed",write4,measured,61444,,,12.868755893876592,-4.316546762589912,ahead
+one-open-b22,stock,same-session,mix4,measured,61441,26.65565507102663,5.517241379310356,26.65565507102663,11.83673469387756,split
+one-open-b22,stock,same-session,mix4,measured,61442,50.2419807746932,1.379310344827589,50.2419807746932,8.571428571428585,split
+one-open-b22,stock,same-session,mix4,measured,61443,26.673698510892805,6.9930069930070005,26.673698510892805,14.893617021276606,split
+one-open-b22,stock,same-session,mix4,measured,61444,43.04736206419575,-14.207650273224049,43.04736206419575,-13.66459627329194,ahead
+one-open-b22,stock,same-session,mix512,measured,61441,206.48132843651575,20.915032679738555,206.48132843651572,92.48826291079813,split
+one-open-b22,stock,same-session,mix512,measured,61442,234.39048551014045,65.6441717791411,234.39048551014042,117.77777777777776,split
+one-open-b22,stock,same-session,mix512,measured,61443,268.24008605639966,1.2578616352201477,268.2400860563997,41.12554112554112,split
+one-open-b22,stock,same-session,mix512,measured,61444,226.16938539623507,38.21656050955413,226.16938539623513,40.80717488789236,split
+one-open-b22,stock,same-session,mix64,measured,61441,212.09722269387336,-15.81920903954802,212.09722269387333,-4.048582995951422,ahead
+one-open-b22,stock,same-session,mix64,measured,61442,207.09163365846385,-18.274111675126893,207.09163365846385,-26.595744680851073,ahead
+one-open-b22,stock,same-session,mix64,measured,61443,175.56256374205756,-15.135135135135137,175.56256374205756,-11.70212765957448,ahead
+one-open-b22,stock,same-session,mix64,measured,61444,217.26571880960518,114.3589743589744,217.26571880960512,-30.740740740740748,split
+one-open-b22,stock,same-session,mix8,measured,61441,18.5700289626306,-3.1088082901554404,18.570028962630623,-2.614379084967333,ahead
+one-open-b22,stock,same-session,mix8,measured,61442,51.16470604190575,-10.526315789473696,51.16470604190575,-12.244897959183676,ahead
+one-open-b22,stock,same-session,mix8,measured,61443,47.608869548638346,-9.950248756218905,47.608869548638346,-12.790697674418606,ahead
+one-open-b22,stock,same-session,mix8,measured,61444,46.163147698875065,2.429149797570873,46.163147698875065,-4.705882352941182,split
+one-open-b22,stock,same-session,read4,cold,61441,-19.961977052733925,23.26530612244899,,,behind
+one-open-b22,stock,same-session,read4,cold,61442,2.476780130785694,-4.968944099378881,,,ahead
+one-open-b22,stock,same-session,read4,cold,61443,-19.67680595169099,15.568862275449113,,,behind
+one-open-b22,stock,same-session,read4,cold,61444,-11.335577998611356,3.2786885245901676,,,behind
+one-open-b22,stock,same-session,read4,repeat,61441,-14.150047667914645,32.48945147679325,,,behind
+one-open-b22,stock,same-session,read4,repeat,61442,8.35411481897339,3.6144578313253017,,,split
+one-open-b22,stock,same-session,read4,repeat,61443,-31.155302966955812,92.11822660098521,,,behind
+one-open-b22,stock,same-session,read4,repeat,61444,-32.71484363670315,65.11627906976744,,,behind
+one-open-b22,stock,same-session,read512,cold,61441,60.34115139847116,-47.94238683127572,,,ahead
+one-open-b22,stock,same-session,read512,cold,61442,76.7605633726268,-38.49372384937239,,,ahead
+one-open-b22,stock,same-session,read512,cold,61443,67.56756757693114,-42.79475982532751,,,ahead
+one-open-b22,stock,same-session,read512,cold,61444,59.27116828836407,-30.522088353413647,,,ahead
+one-open-b22,stock,same-session,read512,repeat,61441,-20.48435923207963,17.180616740088126,,,behind
+one-open-b22,stock,same-session,read512,repeat,61442,-1.5494636579037602,26.18025751072961,,,behind
+one-open-b22,stock,same-session,read512,repeat,61443,-52.4871355068995,358.6666666666667,,,behind
+one-open-b22,stock,same-session,read512,repeat,61444,-50.895614578648576,119.38325991189424,,,behind
+one-open-b22,stock,same-session,txn4_batch,measured,61441,,,14.815314061825768,13.734701934465065,split
+one-open-b22,stock,same-session,txn4_batch,measured,61442,,,16.735032136057693,7.395416205163174,split
+one-open-b22,stock,same-session,txn4_batch,measured,61443,,,3.9793423875858824,22.166905661139502,split
+one-open-b22,stock,same-session,txn4_batch,measured,61444,,,0.13900925004453057,26.92168584983936,split
+one-open-b22,stock,same-session,txn4_sync,measured,61441,,,5.54308063528175,-3.851063681436606,ahead
+one-open-b22,stock,same-session,txn4_sync,measured,61442,,,3.12264723607778,-0.9681600303625637,ahead
+one-open-b22,stock,same-session,txn4_sync,measured,61443,,,7.454368658628141,-2.5087524298703867,ahead
+one-open-b22,stock,same-session,txn4_sync,measured,61444,,,-0.1354949009278683,2.909671477343445,behind
+one-open-b22,stock,same-session,write1m,measured,61441,,,381.3874550511811,-78.02325581395348,ahead
+one-open-b22,stock,same-session,write1m,measured,61442,,,716.9899035516833,146.53061224489798,split
+one-open-b22,stock,same-session,write1m,measured,61443,,,315.32919809716986,242.6356589147287,split
+one-open-b22,stock,same-session,write1m,measured,61444,,,202.0408804504027,186.91099476439788,split
+one-open-b22,stock,same-session,write4,measured,61441,,,66.13549297237581,8.805031446540902,split
+one-open-b22,stock,same-session,write4,measured,61442,,,95.92912554029446,-21.62162162162162,ahead
+one-open-b22,stock,same-session,write4,measured,61443,,,75.04933276608956,-9.150326797385633,ahead
+one-open-b22,stock,same-session,write4,measured,61444,,,110.45433873065909,-19.393939393939384,ahead
+one-open-b22,two-open-direct,same-session,mix4,measured,61441,5.744389446446263,-2.547770700636931,5.744389446446263,-1.4388489208633004,ahead
+one-open-b22,two-open-direct,same-session,mix4,measured,61442,0.3530486859458559,8.888888888888879,0.3530486859458781,15.15151515151516,split
+one-open-b22,two-open-direct,same-session,mix4,measured,61443,-11.663302745569393,-8.38323353293412,-11.663302745569403,-9.395973154362414,split
+one-open-b22,two-open-direct,same-session,mix4,measured,61444,-2.892172045398178,-5.988023952095811,-2.892172045398189,-10.322580645161295,split
+one-open-b22,two-open-direct,same-session,mix512,measured,61441,31.993571308595126,-30.451127819548873,31.993571308595104,-50.48309178743962,ahead
+one-open-b22,two-open-direct,same-session,mix512,measured,61442,-6.56559534287201,23.28767123287672,-6.56559534287201,56.05095541401275,behind
+one-open-b22,two-open-direct,same-session,mix512,measured,61443,30.933028274422124,-32.0675105485232,30.933028274422124,-38.7218045112782,ahead
+one-open-b22,two-open-direct,same-session,mix512,measured,61444,-6.919958826805184,-14.229249011857725,-6.919958826805173,-32.03463203463204,split
+one-open-b22,two-open-direct,same-session,mix64,measured,61441,0.6720524791927973,5.673758865248213,0.6720524791927973,21.53846153846153,split
+one-open-b22,two-open-direct,same-session,mix64,measured,61442,-0.5533129816632454,1.2578616352201477,-0.5533129816632454,6.153846153846154,behind
+one-open-b22,two-open-direct,same-session,mix64,measured,61443,-9.958994029029643,9.790209790209792,-9.958994029029656,19.138755980861234,behind
+one-open-b22,two-open-direct,same-session,mix64,measured,61444,-0.34342125968763737,133.51955307262574,-0.3434212596876485,-7.881773399014779,split
+one-open-b22,two-open-direct,same-session,mix8,measured,61441,-8.875639042876426,11.976047904191622,-8.875639042876415,16.8627450980392,behind
+one-open-b22,two-open-direct,same-session,mix8,measured,61442,0.2059274664969024,-1.0582010582010692,0.2059274664969024,-4.444444444444451,ahead
+one-open-b22,two-open-direct,same-session,mix8,measured,61443,21.524823939070735,-12.56038647342994,21.524823939070714,-21.328671328671334,ahead
+one-open-b22,two-open-direct,same-session,mix8,measured,61444,15.728883887255263,-1.9379844961240122,15.728883887255263,-11.31386861313869,ahead
+one-open-b22,two-open-direct,same-session,read4,cold,61441,-0.7604562663703351,1.3422818791946511,,,behind
+one-open-b22,two-open-direct,same-session,read4,cold,61442,-13.209494268757716,13.33333333333333,,,behind
+one-open-b22,two-open-direct,same-session,read4,cold,61443,0.1901142871580941,-1.025641025641022,,,ahead
+one-open-b22,two-open-direct,same-session,read4,cold,61444,3.5914701624316647,-3.076923076923066,,,ahead
+one-open-b22,two-open-direct,same-session,read4,repeat,61441,-0.8547009909891656,8.275862068965512,,,behind
+one-open-b22,two-open-direct,same-session,read4,repeat,61442,4.738154590835886,6.1728395061728225,,,split
+one-open-b22,two-open-direct,same-session,read4,repeat,61443,0.18939403494198093,0.0,,,ahead
+one-open-b22,two-open-direct,same-session,read4,repeat,61444,-17.18749992595986,13.903743315508033,,,behind
+one-open-b22,two-open-direct,same-session,read512,cold,61441,32.30277184869581,-30.8743169398907,,,ahead
+one-open-b22,two-open-direct,same-session,read512,cold,61442,15.610328642239214,-7.547169811320753,,,ahead
+one-open-b22,two-open-direct,same-session,read512,cold,61443,-1.5765765894095285,3.5573122529644285,,,behind
+one-open-b22,two-open-direct,same-session,read512,cold,61444,7.9314040631830895,-2.259887005649708,,,ahead
+one-open-b22,two-open-direct,same-session,read512,repeat,61441,-11.806256311955998,8.571428571428585,,,behind
+one-open-b22,two-open-direct,same-session,read512,repeat,61442,17.640047679885672,-7.547169811320753,,,ahead
+one-open-b22,two-open-direct,same-session,read512,repeat,61443,-34.819897079586305,251.0204081632653,,,behind
+one-open-b22,two-open-direct,same-session,read512,repeat,61444,-0.7411982691045149,-11.70212765957448,,,split
+one-open-b22,two-open-direct,same-session,txn4_batch,measured,61441,,,-2.585610458162002,9.563878034170958,behind
+one-open-b22,two-open-direct,same-session,txn4_batch,measured,61442,,,12.530910882157054,-11.809976911775,ahead
+one-open-b22,two-open-direct,same-session,txn4_batch,measured,61443,,,-1.276644810454286,11.764271130696669,behind
+one-open-b22,two-open-direct,same-session,txn4_batch,measured,61444,,,4.087201299543408,-9.388883404087267,ahead
+one-open-b22,two-open-direct,same-session,txn4_sync,measured,61441,,,-0.1799897380355242,-0.03337005041446073,split
+one-open-b22,two-open-direct,same-session,txn4_sync,measured,61442,,,-0.07249007341936231,0.193289668590646,behind
+one-open-b22,two-open-direct,same-session,txn4_sync,measured,61443,,,-0.2877316003693009,0.23239126553951106,behind
+one-open-b22,two-open-direct,same-session,txn4_sync,measured,61444,,,-2.5897136772053964,3.551606751932601,behind
+one-open-b22,two-open-direct,same-session,write1m,measured,61441,,,-7.680668852017769,71.04072398190047,behind
+one-open-b22,two-open-direct,same-session,write1m,measured,61442,,,45.83141970155451,-41.47286821705426,ahead
+one-open-b22,two-open-direct,same-session,write1m,measured,61443,,,-39.26134171821259,-0.8968609865470878,split
+one-open-b22,two-open-direct,same-session,write1m,measured,61444,,,-59.42990857238326,1152.5714285714284,behind
+one-open-b22,two-open-direct,same-session,write4,measured,61441,,,-5.3283322295062945,20.97902097902098,behind
+one-open-b22,two-open-direct,same-session,write4,measured,61442,,,11.578174282715658,-19.889502762430944,ahead
+one-open-b22,two-open-direct,same-session,write4,measured,61443,,,-2.619880132166874,-2.7972027972028135,split
+one-open-b22,two-open-direct,same-session,write4,measured,61444,,,25.830204212869678,-13.0718954248366,ahead
+one-open-b22,two-open-mixed,same-session,mix4,measured,61441,0.13695524622172606,-6.134969325153373,0.13695524622170385,-6.802721088435371,ahead
+one-open-b22,two-open-mixed,same-session,mix4,measured,61442,-8.95264136146241,0.0,-8.95264136146241,1.526717557251911,behind
+one-open-b22,two-open-mixed,same-session,mix4,measured,61443,-22.40134192693237,13.33333333333333,-22.401341926932382,17.90393013100435,behind
+one-open-b22,two-open-mixed,same-session,mix4,measured,61444,-21.739935190786262,16.296296296296298,-21.739935190786277,19.313304721030033,behind
+one-open-b22,two-open-mixed,same-session,mix512,measured,61441,1.6631584682984757,-32.481751824817515,1.6631584682984757,-37.878787878787875,ahead
+one-open-b22,two-open-mixed,same-session,mix512,measured,61442,23.29687631533823,-5.594405594405593,23.296876315338256,-14.335664335664344,ahead
+one-open-b22,two-open-mixed,same-session,mix512,measured,61443,8.389092499197615,-35.34136546184739,8.389092499197591,-32.92181069958847,ahead
+one-open-b22,two-open-mixed,same-session,mix512,measured,61444,-5.017130891602816,4.8309178743961345,-5.017130891602816,-18.65284974093264,split
+one-open-b22,two-open-mixed,same-session,mix64,measured,61441,0.4190225352598054,-11.834319526627224,0.41902253525978317,8.21917808219177,split
+one-open-b22,two-open-mixed,same-session,mix64,measured,61442,19.132679127951203,-4.733727810650878,19.132679127951178,-3.7209302325581395,ahead
+one-open-b22,two-open-mixed,same-session,mix64,measured,61443,-8.470404259356378,6.802721088435382,-8.470404259356368,23.880597014925353,behind
+one-open-b22,two-open-mixed,same-session,mix64,measured,61444,1.3965462297366615,125.94594594594595,1.3965462297366615,-19.742489270386265,split
+one-open-b22,two-open-mixed,same-session,mix8,measured,61441,-12.416225227165267,-1.0582010582010692,-12.416225227165256,0.0,split
+one-open-b22,two-open-mixed,same-session,mix8,measured,61442,1.3489023764193586,-4.10256410256411,1.3489023764193586,-1.526717557251922,ahead
+one-open-b22,two-open-mixed,same-session,mix8,measured,61443,11.334623557920832,-9.950248756218905,11.334623557920832,-17.88321167883211,ahead
+one-open-b22,two-open-mixed,same-session,mix8,measured,61444,6.126544786594446,0.7968127490040056,6.126544786594468,-16.206896551724135,split
+one-open-b22,two-open-mixed,same-session,read4,cold,61441,-19.29657792903008,19.367588932806324,,,behind
+one-open-b22,two-open-mixed,same-session,read4,cold,61442,-14.96388029212553,25.92592592592593,,,behind
+one-open-b22,two-open-mixed,same-session,read4,cold,61443,-33.93536125463097,24.51612903225806,,,behind
+one-open-b22,two-open-mixed,same-session,read4,cold,61444,-6.397306473671083,2.1621621621621623,,,behind
+one-open-b22,two-open-mixed,same-session,read4,repeat,61441,-19.373219472337567,25.099601593625497,,,behind
+one-open-b22,two-open-mixed,same-session,read4,repeat,61442,4.11471318670471,0.0,,,ahead
+one-open-b22,two-open-mixed,same-session,read4,repeat,61443,-15.435605981849331,63.179916317991626,,,behind
+one-open-b22,two-open-mixed,same-session,read4,repeat,61444,-12.109374770807335,73.87755102040816,,,behind
+one-open-b22,two-open-mixed,same-session,read512,cold,61441,58.42217487158554,-44.27312775330395,,,ahead
+one-open-b22,two-open-mixed,same-session,read512,cold,61442,76.29107983576695,-40.963855421686745,,,ahead
+one-open-b22,two-open-mixed,same-session,read512,cold,61443,67.11711708754552,-41.77777777777777,,,ahead
+one-open-b22,two-open-mixed,same-session,read512,cold,61444,60.87888528962695,-33.96946564885497,,,ahead
+one-open-b22,two-open-mixed,same-session,read512,repeat,61441,139.05146319155926,-60.17964071856288,,,ahead
+one-open-b22,two-open-mixed,same-session,read512,repeat,61442,-4.88676996931442,30.666666666666664,,,behind
+one-open-b22,two-open-mixed,same-session,read512,repeat,61443,36.763865089506595,62.26415094339623,,,split
+one-open-b22,two-open-mixed,same-session,read512,repeat,61444,-48.36318714596288,111.91489361702125,,,behind
+one-open-b22,two-open-mixed,same-session,txn4_batch,measured,61441,,,-5.233476133724146,6.609184768530518,behind
+one-open-b22,two-open-mixed,same-session,txn4_batch,measured,61442,,,9.003241109074512,-12.42422663401247,ahead
+one-open-b22,two-open-mixed,same-session,txn4_batch,measured,61443,,,-5.500249874184715,12.882216271192771,behind
+one-open-b22,two-open-mixed,same-session,txn4_batch,measured,61444,,,0.8201224132179386,3.7278528332724825,split
+one-open-b22,two-open-mixed,same-session,txn4_sync,measured,61441,,,19.486409863648802,-15.920054195620036,ahead
+one-open-b22,two-open-mixed,same-session,txn4_sync,measured,61442,,,3.9952484843655878,-1.1702836463448718,ahead
+one-open-b22,two-open-mixed,same-session,txn4_sync,measured,61443,,,1.9531590164082457,-0.656624134746242,ahead
+one-open-b22,two-open-mixed,same-session,txn4_sync,measured,61444,,,-5.720150823643766,4.308731291480483,behind
+one-open-b22,two-open-mixed,same-session,write1m,measured,61441,,,17.013945564368104,10.526315789473696,split
+one-open-b22,two-open-mixed,same-session,write1m,measured,61442,,,16.688139811964486,-5.031446540880491,ahead
+one-open-b22,two-open-mixed,same-session,write1m,measured,61443,,,-43.34899281691985,26.285714285714292,behind
+one-open-b22,two-open-mixed,same-session,write1m,measured,61444,,,-23.945273993188877,3.007518796992481,behind
+one-open-b22,two-open-mixed,same-session,write4,measured,61441,,,-15.450669827913032,32.061068702290065,behind
+one-open-b22,two-open-mixed,same-session,write4,measured,61442,,,5.76113245361789,-7.643312101910826,ahead
+one-open-b22,two-open-mixed,same-session,write4,measured,61443,,,-13.533856821734357,6.1068702290076216,behind
+one-open-b22,two-open-mixed,same-session,write4,measured,61444,,,-5.909389236747186,-1.4814814814814725,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix4,measured,61441,-10.133717264705133,6.5359477124183,-10.133717264705123,4.379562043795637,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix4,measured,61442,-3.577180529885493,-5.442176870748305,-3.577180529885504,-9.398496240601506,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix4,measured,61443,-0.009232358928701334,6.5359477124183,-0.009232358928701334,5.9259259259259345,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix4,measured,61444,2.7325762012885946,2.547770700636942,2.7325762012885946,-2.877697841726612,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix512,measured,61441,-0.3052512293717946,-3.2432432432432434,-0.3052512293717946,-21.46341463414634,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix512,measured,61442,7.782944328164465,-10.74074074074074,7.782944328164465,-39.183673469387756,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix512,measured,61443,0.7056978819675264,58.38509316770186,0.7056978819675264,158.8957055214724,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix512,measured,61444,0.40133431371689454,24.42396313364057,0.40133431371687234,52.229299363057336,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix64,measured,61441,-8.546173120286138,16.107382550335593,-8.546173120286138,20.67510548523208,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix64,measured,61442,-8.751662907015145,184.47204968944098,-8.751662907015156,9.661835748792269,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix64,measured,61443,1.02262424824493,10.191082802547768,1.0226242482449077,6.8273092369478094,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix64,measured,61444,-0.07352198823588063,0.9569377990430672,-0.07352198823585843,7.4866310160427885,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix8,measured,61441,9.647594203949538,8.556149732620334,9.647594203949538,-9.395973154362414,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix8,measured,61442,-4.747066897861918,10.6951871657754,-4.747066897861918,12.4031007751938,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix8,measured,61443,-0.5454500510787774,7.734806629834257,-0.5454500510787774,5.333333333333323,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",mix8,measured,61444,-13.338278458002307,-15.810276679841905,-13.338278458002307,14.403292181069949,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,cold,61441,3.8499505635104514,1.324503311258285,,,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,cold,61442,20.82294277662129,-17.97385620915034,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,cold,61443,13.976164758090782,-11.398963730569944,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,cold,61444,-15.704824945259777,-6.34920634920636,,,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,repeat,61441,1.5429123652666021,-6.369426751592355,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,repeat,61442,-9.378531170335025,3.100775193798455,,,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,repeat,61443,2.0289854798800633,-3.076923076923066,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read4,repeat,61444,-3.21361083984375,-16.901408450704224,,,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,cold,61441,12.200956924005668,14.624505928853736,,,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,cold,61442,-32.00319234353318,29.931972789115658,,,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,cold,61443,2.6589595359947094,-9.541984732824439,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,cold,61444,0.10729614286306699,3.4682080924855363,,,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,repeat,61441,-18.09917356216658,39.097744360902254,,,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,repeat,61442,-7.8021977978830375,6.802721088435382,,,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,repeat,61443,96.73790776762208,-71.89922480620154,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",read512,repeat,61444,32.487725041502635,-22.48995983935742,,,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_batch,measured,61441,,,-0.6228122706216532,-7.102815092505821,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_batch,measured,61442,,,3.735166873578888,6.555930186433967,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_batch,measured,61443,,,0.09769531732033432,-7.768418790348585,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_batch,measured,61444,,,-0.8623379513897023,-4.542635399031136,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_sync,measured,61441,,,-3.3596224718460133,2.711760716966549,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_sync,measured,61442,,,-9.03204418710255,5.696013984158577,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_sync,measured,61443,,,-5.070092076459165,6.820090881899343,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",txn4_sync,measured,61444,,,4.512133725015954,-4.040584663061397,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write1m,measured,61441,,,-14.293760127884159,-17.989417989418,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write1m,measured,61442,,,-22.59022796140244,46.357615894039725,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write1m,measured,61443,,,41.01789280594386,-7.239819004524895,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write1m,measured,61444,,,3.141107766378237,-75.72992700729927,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write4,measured,61441,,,-5.334832785937593,-15.02890173410405,split
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write4,measured,61442,,,6.244145252124045,-8.275862068965512,ahead
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write4,measured,61443,,,-16.293423013840858,31.654676258992808,behind
+one-open-b22-fixed,one-open-b22,"cross-session, same seed",write4,measured,61444,,,-13.953093725394917,4.5112781954887105,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix4,measured,61441,-25.56788749141924,-14.65968586387435,-25.56788749141924,-18.285714285714285,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix4,measured,61442,21.870005591002407,-71.63265306122449,21.870005591002407,-14.539007092198586,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix4,measured,61443,-5.808858522428717,6.5359477124183,-5.808858522428717,7.5187969924811915,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix4,measured,61444,-0.11591051116072171,9.523809523809534,-0.11591051116073281,4.651162790697683,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix512,measured,61441,30.76191574117566,-60.57268722466959,30.76191574117566,-50.61349693251533,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix512,measured,61442,1.0563489163561535,16.425120772946865,1.0563489163561535,8.75912408759123,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix512,measured,61443,126.90800702906917,-59.90566037735848,126.90800702906917,-46.984924623115575,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix512,measured,61444,23.981003401995117,-11.764705882352944,23.981003401995117,-50.82304526748971,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix64,measured,61441,26.01014154999872,-65.26104417670682,26.01014154999872,-49.29078014184397,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix64,measured,61442,9.200936745049049,82.47011952191237,9.200936745049027,2.714932126696823,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix64,measured,61443,-8.327619822705978,-45.59748427672955,-8.327619822705989,23.720930232558146,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix64,measured,61444,0.5369120265012794,141.14285714285714,0.5369120265012794,-9.865470852017932,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix8,measured,61441,0.2500811077246201,-78.21888412017167,0.2500811077246201,7.569721115537864,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix8,measured,61442,9.990360031141332,-1.8957345971564066,9.990360031141332,0.0,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix8,measured,61443,20.873485102627477,-78.8961038961039,20.873485102627498,-4.048582995951422,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",mix8,measured,61444,-13.241426648771826,11.518324607329845,-13.241426648771826,1.4598540145985384,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,cold,61441,4.837117640788846,-1.2903225806451535,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,cold,61442,3.615960339070323,-9.712230215827343,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,cold,61443,-5.417117853577325,-2.28571428571428,,,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,cold,61444,0.4730371461559191,4.7337278106508895,,,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,repeat,61441,-10.896817626649646,4.255319148936154,,,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,repeat,61442,-2.485875586336106,-2.9197080291970767,,,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,repeat,61443,-4.637681329941401,8.000000000000007,,,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read4,repeat,61444,25.047259090541175,-8.290155440414516,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,cold,61441,49.76076555191293,-12.121212121212121,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,cold,61442,-20.989624909087922,20.12578616352203,,,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,cold,61443,5.549132940776391,-7.058823529411773,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,cold,61444,20.278969950780514,-1.104972375690616,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,repeat,61441,4.462809912101795,-1.0695187165775333,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,repeat,61442,122.63736271034884,-67.15481171548117,,,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,repeat,61443,0.6749156371160581,13.725490196078427,,,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",read512,repeat,61444,-34.36988542604431,34.96503496503496,,,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61441,,,2.8896239710832994,-4.066709084228737,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61442,,,5.42459459293585,-5.6155792136607925,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61443,,,-3.4186419737936014,3.7345902828136213,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61444,,,-5.711540216882183,0.1503653614484124,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61441,,,12.433696590774268,-15.712442910478908,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61442,,,11.872070969366089,-5.30807229436514,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61443,,,-0.10046710415774207,3.7203381863713414,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61444,,,-3.618261316139282,0.5035962236838998,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write1m,measured,61441,,,69.73260110573831,-68.87550200803211,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write1m,measured,61442,,,120.38848099387592,-47.12918660287082,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write1m,measured,61443,,,0.5100392469060022,-12.765957446808507,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write1m,measured,61444,,,-44.88959013423541,67.29559748427675,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write4,measured,61441,,,-15.336287428285845,-18.78453038674034,split
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write4,measured,61442,,,18.355305540770296,-10.738255033557031,ahead
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write4,measured,61443,,,-9.166182694967818,19.6078431372549,behind
+one-open-b22-fixed,one-open-rc1,"cross-session, same seed",write4,measured,61444,,,8.231345271054824,-11.46496815286624,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix4,measured,61441,0.216840598245982,0.0,0.216840598245982,-1.3793103448275779,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix4,measured,61442,15.247376097890552,-13.66459627329194,15.247376097890552,-16.896551724137932,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix4,measured,61443,-11.325934556208505,9.395973154362425,-11.325934556208516,7.5187969924811915,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,mix4,measured,61444,-0.6013791409702041,0.0,-0.6013791409702152,-6.896551724137934,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix512,measured,61441,9.844844811079966,-54.10256410256411,9.844844811079966,-66.8724279835391,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix512,measured,61442,32.472496287768735,-15.73426573426574,32.472496287768735,-69.08713692946058,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix512,measured,61443,8.504576356265448,28.14070351758795,8.504576356265448,141.14285714285714,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix512,measured,61444,0.038114667685995585,21.076233183856495,0.03811466768597338,62.585034013605444,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix64,measured,61441,9.075954030299727,-61.89427312775331,9.075954030299705,-44.5736434108527,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix64,measured,61442,0.363234821156766,180.98159509202455,0.36323482115674377,4.608294930875578,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix64,measured,61443,9.461689297091237,-53.74331550802138,9.461689297091237,22.580645161290324,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix64,measured,61444,0.4692342717468989,179.4701986754967,0.4692342717468989,7.4866310160427885,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix8,measured,61441,-4.599833768348793,-2.8708133971291905,-4.599833768348793,-10.596026490066235,split
+one-open-b22-fixed,pr-direct-sg1,same-session,mix8,measured,61442,9.140296429620886,-4.608294930875578,9.140296429620886,-3.9735099337748436,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix8,measured,61443,10.626441728893244,-2.9850746268656803,10.626441728893266,-10.902255639097758,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,mix8,measured,61444,-8.743229530554842,7.035175879396971,-8.743229530554842,4.5112781954887105,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,cold,61441,-8.489634853270477,-25.365853658536587,,,split
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,cold,61442,10.099750919982409,1.6194331983805599,,,split
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,cold,61443,-14.08450690078693,3.6363636363636376,,,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,cold,61444,-1.2298959120135344,-1.1173184357541888,,,split
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,repeat,61441,-9.93249755967318,2.7972027972027913,,,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,repeat,61442,37.74011338227044,-33.165829145728644,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,repeat,61443,1.3526568938259098,-3.076923076923066,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read4,repeat,61444,27.22117176107175,-16.901408450704224,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,cold,61441,4.3062200756823765,4.316546762589946,,,split
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,cold,61442,-24.42138866494631,24.836601307189543,,,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,cold,61443,9.595375710754418,-12.222222222222223,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,cold,61444,6.437768227654983,-12.682926829268293,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,repeat,61441,-4.79338844447097,19.354838709677423,,,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,repeat,61442,4.615384629365926,1.2903225806451646,,,split
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,repeat,61443,12.710911145424086,-1.3605442176870763,,,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,read512,repeat,61444,-27.577741397647436,12.86549707602338,,,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_batch,measured,61441,,,3.03267196631114,-8.283141562213526,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_batch,measured,61442,,,14.943955097222016,-1.1162850622101095,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_batch,measured,61443,,,-20.185479220055313,19.85498684139857,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_batch,measured,61444,,,4.083153487921276,-10.663665100518472,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_sync,measured,61441,,,6.527782819043737,-4.101392838075768,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_sync,measured,61442,,,-1.792708932538356,-1.4896829834989411,split
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_sync,measured,61443,,,-4.7808473775826315,6.82704107539065,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,txn4_sync,measured,61444,,,7.656876534077828,-6.839771201471301,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,write1m,measured,61441,,,-13.79061467686551,-4.907975460122705,split
+one-open-b22-fixed,pr-direct-sg1,same-session,write1m,measured,61442,,,60.55702539139376,-30.503144654088043,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,write1m,measured,61443,,,-21.399991819350404,45.390070921985796,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,write1m,measured,61444,,,4.215965645169595,-51.45985401459854,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,write4,measured,61441,,,-9.959444541026674,2.7972027972027913,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,write4,measured,61442,,,6.483057336067577,-8.275862068965512,ahead
+one-open-b22-fixed,pr-direct-sg1,same-session,write4,measured,61443,,,-28.107426306451,27.97202797202796,behind
+one-open-b22-fixed,pr-direct-sg1,same-session,write4,measured,61444,,,-2.8799274026832133,0.0,behind
+one-open-b22-fixed,stock,"cross-session, same seed",mix4,measured,61441,13.820729086368623,12.413793103448278,13.820729086368644,16.73469387755102,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix4,measured,61442,44.86755389070658,-4.137931034482767,44.86755389070656,-1.6326530612244872,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",mix4,measured,61443,26.66200354037802,13.98601398601398,26.66200354037802,21.702127659574487,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix4,measured,61444,46.956240236533105,-12.021857923497258,46.956240236533084,-16.149068322981375,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",mix512,measured,61441,205.5457904136683,16.993464052287564,205.5457904136683,51.1737089201878,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix512,measured,61442,260.4159108360735,47.85276073619631,260.41591083607346,32.44444444444443,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix512,measured,61443,270.83874854425505,60.37735849056607,270.8387485442551,265.3679653679654,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix512,measured,61444,227.47841506066965,71.97452229299364,227.47841506066968,114.34977578475336,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix64,measured,61441,185.42485373885,-2.259887005649708,185.42485373884995,15.789473684210531,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix64,measured,61442,180.2160090650292,132.48730964467006,180.2160090650292,-19.50354609929079,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix64,measured,61443,178.38053333796924,-6.486486486486487,178.38053333796918,-5.673758865248235,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",mix64,measured,61444,217.0324587451455,116.41025641025644,217.03245874514553,-25.555555555555554,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix8,measured,61441,30.009184204450644,5.181347150259064,30.00918420445067,-11.764705882352944,split
+one-open-b22-fixed,stock,"cross-session, same seed",mix8,measured,61442,43.98881632014018,-0.9569377990430672,43.98881632014016,-1.3605442176870763,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",mix8,measured,61443,46.80373689428847,-2.9850746268656803,46.80373689428849,-8.139534883720934,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",mix8,measured,61444,26.667500055817904,-13.765182186234814,26.66750005581793,9.019607843137244,split
+one-open-b22-fixed,stock,"cross-session, same seed",read4,cold,61441,-16.88055273725303,24.89795918367348,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read4,cold,61442,23.8154614167432,-22.049689440993802,,,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",read4,cold,61443,-8.450704012538345,2.3952095808383422,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read4,cold,61444,-25.260170262655844,-3.2786885245901676,,,split
+one-open-b22-fixed,stock,"cross-session, same seed",read4,repeat,61441,-12.825458137807411,24.0506329113924,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read4,repeat,61442,-1.8079096136646267,6.8273092369478094,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read4,repeat,61443,-29.758454060487914,86.20689655172416,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read4,repeat,61444,-34.87712671519988,37.2093023255814,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read512,cold,61441,79.90430621205336,-40.32921810699588,,,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",read512,cold,61442,20.191540288972188,-20.083682008368196,,,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",read512,cold,61443,72.02312139425233,-48.25327510917031,,,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",read512,cold,61444,59.44206010863042,-28.11244979919678,,,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",read512,repeat,61441,-34.876033063734425,62.99559471365639,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read512,repeat,61442,-9.230769236390834,34.76394849785407,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read512,repeat,61443,-6.524184475808648,28.888888888888896,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",read512,repeat,61444,-34.94271685964022,70.04405286343614,,,behind
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_batch,measured,61441,,,14.100230197295938,5.656336360047365,split
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_batch,measured,61442,,,21.09528038626538,14.436184715003852,split
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_batch,measured,61443,,,4.080925336079022,12.676468806172103,split
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_batch,measured,61444,,,-0.7245274308642413,21.15609641937748,behind
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_sync,measured,61441,,,1.9972315807802676,-1.2437345965686242,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_sync,measured,61442,,,-6.191435829194658,4.672707423077549,behind
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_sync,measured,61443,,,2.006333227457824,4.14023925630993,split
+one-open-b22-fixed,stock,"cross-session, same seed",txn4_sync,measured,61444,,,4.370525112967649,-1.2484809251769757,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",write1m,measured,61441,,,312.57908694043914,-81.97674418604652,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",write1m,measured,61442,,,532.430021917716,260.8163265306123,split
+one-open-b22-fixed,stock,"cross-session, same seed",write1m,measured,61443,,,485.6884833644533,217.82945736434112,split
+one-open-b22-fixed,stock,"cross-session, same seed",write1m,measured,61444,,,211.52831000386755,-30.36649214659686,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",write4,measured,61441,,,57.272442224206465,-7.547169811320753,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",write4,measured,61442,,,108.16322473024691,-28.108108108108098,ahead
+one-open-b22-fixed,stock,"cross-session, same seed",write4,measured,61443,,,46.52780449560468,19.6078431372549,split
+one-open-b22-fixed,stock,"cross-session, same seed",write4,measured,61444,,,81.08944759841012,-15.75757575757576,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix4,measured,61441,-4.971448003345291,3.821656050955413,-4.97144800334528,2.877697841726623,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix4,measured,61442,-3.2367610327942997,2.962962962962945,-3.2367610327942886,4.329004329004338,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix4,measured,61443,-11.671458306525684,-2.39520958083832,-11.671458306525684,-4.026845637583887,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix4,measured,61444,-0.23862664912245313,-3.59281437125748,-0.23862664912246423,-12.903225806451612,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix512,measured,61441,31.590659309483904,-32.70676691729324,31.590659309483883,-61.11111111111111,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix512,measured,61442,0.7063523549441619,10.04566210045661,0.7063523549441619,-5.095541401273884,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix512,measured,61443,31.85701988175067,7.594936708860778,31.85701988175067,58.64661654135337,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix512,measured,61444,-6.546396682355349,6.71936758893279,-6.546396682355349,3.463203463203457,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix64,measured,61441,-7.931555409424318,22.695035460992898,-7.931555409424329,46.66666666666668,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix64,measured,61442,-9.256551801702473,188.05031446540883,-9.256551801702473,16.410256410256395,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix64,measured,61443,-9.038212868606843,20.97902097902098,-9.038212868606854,27.27272727272727,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix64,measured,61444,-0.41669075778536513,135.75418994413408,-0.41669075778536513,-0.9852216748768461,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix8,measured,61441,-0.08433047679091699,21.556886227544926,-0.08433047679090588,5.882352941176472,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix8,measured,61442,-4.550914945960704,9.523809523809511,-4.550914945960704,7.407407407407396,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix8,measured,61443,20.861966724821677,-5.797101449275354,20.861966724821677,-17.132867132867137,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",mix8,measured,61444,0.2926430980350059,-17.441860465116278,0.2926430980350059,1.4598540145985384,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,cold,61441,3.060217106827734,2.68456375838928,,,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,cold,61442,4.862843075199086,-7.037037037037052,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,cold,61443,14.192849731250767,-12.307692307692298,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,cold,61444,-12.677388884799246,-9.230769230769232,,,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,repeat,61441,0.675024087001419,1.379310344827589,,,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,repeat,61442,-5.084745884699338,9.4650205761317,,,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,repeat,61443,2.2222222922907875,-3.076923076923066,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read4,repeat,61444,-19.84877140508482,-5.3475935828877,,,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,cold,61441,48.44497605122069,-20.76502732240437,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,cold,61442,-21.388667202127444,20.12578616352203,,,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,cold,61443,1.0404624130188278,-6.3241106719367775,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,cold,61444,8.047210296680829,1.1299435028248483,,,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,repeat,61441,-27.768595053027422,51.020408163265316,,,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,repeat,61442,8.461538470377072,-1.2578616352201255,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,repeat,61443,28.23397076640464,-1.3605442176870763,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",read512,repeat,61444,31.50572831671905,-31.56028368794327,,,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_batch,measured,61441,,,-3.1923192295797542,1.781758369225206,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_batch,measured,61442,,,16.734128187963982,-6.028300566710976,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_batch,measured,61443,,,-1.180196715332582,3.0819544912835006,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_batch,measured,61444,,,3.1896178601980463,-13.505016062030572,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_sync,measured,61441,,,-3.5335652341954793,2.6774857506337124,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_sync,measured,61442,,,-9.09798692505941,5.900313459302087,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_sync,measured,61443,,,-5.343235419756665,7.068331442950249,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",txn4_sync,measured,61444,,,1.8055687036000245,-0.6324835888396496,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write1m,measured,61441,,,-20.876572597977393,40.271493212669675,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write1m,measured,61442,,,12.887769551623807,-14.341085271317821,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write1m,measured,61443,,,-14.347623972420498,-8.071748878923767,split
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write1m,measured,61444,,,-58.15555827972363,204.0,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write4,measured,61441,,,-10.378907400720516,2.7972027972027913,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write4,measured,61442,,,18.545277554596538,-26.519337016574585,ahead
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write4,measured,61443,,,-18.486434993618207,27.97202797202796,behind
+one-open-b22-fixed,two-open-direct,"cross-session, same seed",write4,measured,61444,,,8.272997884192158,-9.150326797385633,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix4,measured,61441,-10.010640675914706,0.0,-10.010640675914695,-2.7210884353741416,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix4,measured,61442,-12.209569747655191,-5.442176870748305,-12.209569747655202,-8.015267175572527,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix4,measured,61443,-22.408506113569537,20.740740740740748,-22.408506113569537,24.890829694323145,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix4,measured,61444,-19.601419284696654,19.259259259259267,-19.601419284696664,15.879828326180267,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix512,measured,61441,1.3528304272558023,-34.67153284671534,1.3528304272558023,-51.21212121212121,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix512,measured,61442,32.89300355732681,-15.73426573426574,32.89300355732683,-47.90209790209791,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix512,measured,61443,9.15399202924827,2.4096385542168752,9.15399202924827,73.66255144032922,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix512,measured,61444,-4.635932045718027,30.434782608695656,-4.635932045718027,23.834196891191706,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix64,measured,61441,-8.162960976302646,2.366863905325456,-8.162960976302669,30.593607305936075,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix64,measured,61442,8.706588638576918,171.00591715976336,8.706588638576896,5.581395348837215,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix64,measured,61443,-7.534400418991993,17.68707482993197,-7.534400418992004,32.33830845771144,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix64,measured,61444,1.3219974729460349,128.10810810810813,1.321997472946057,-13.733905579399142,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix8,measured,61441,-3.9664980485810464,7.407407407407396,-3.9664980485810353,-9.395973154362414,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix8,measured,61442,-3.4621978196380354,6.153846153846154,-3.4621978196380354,10.687022900763354,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix8,measured,61443,10.727348796855773,-2.9850746268656803,10.727348796855797,-13.503649635036496,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",mix8,measured,61444,-8.028909274898034,-15.139442231075684,-8.028909274898021,-4.137931034482767,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,cold,61441,-16.189536076236553,20.948616600790505,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,cold,61442,2.743142254104347,3.2921810699588328,,,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,cold,61443,-24.702058496740708,10.322580645161295,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,cold,61444,-21.097445636029043,-4.324324324324325,,,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,repeat,61441,-18.1292189058599,17.131474103585663,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,repeat,61442,-5.649717642415297,3.100775193798455,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,repeat,61443,-13.719806706072479,58.15899581589959,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read4,repeat,61444,-14.933837430379116,44.48979591836735,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,cold,61441,77.75119618574062,-36.12334801762114,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,cold,61442,19.872306471434808,-23.293172690763043,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,cold,61443,71.56069360862428,-47.333333333333336,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,cold,61444,61.05150212822381,-31.679389312977115,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,repeat,61441,95.7851239656202,-44.61077844311377,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,repeat,61442,-12.307692308263995,39.55555555555554,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,repeat,61443,169.06636675922863,-54.40251572327044,,,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",read512,repeat,61444,-31.58756136574802,64.25531914893618,,,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61441,,,-5.823693672804908,-0.9630684972060877,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61442,,,13.074694062108016,-6.682820071908702,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61443,,,-5.407928043432387,4.113052971419506,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61444,,,-0.04928776498879239,-0.9841253281866802,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61441,,,15.472117587067613,-13.640007254450104,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61442,,,-5.397648311229409,4.459070817663591,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61443,,,-3.2159600205824757,6.118684384410922,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61444,,,-1.4661179530632173,0.09404869268299088,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write1m,measured,61441,,,0.2882528692243813,-9.35672514619883,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write1m,measured,61442,,,-9.671976975478291,38.993710691823914,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write1m,measured,61443,,,-20.111943417076496,17.14285714285715,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write1m,measured,61444,,,-21.556313087891244,-75.0,split
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write4,measured,61441,,,-19.96123521422416,12.213740458015243,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write4,measured,61442,,,12.36501118431308,-15.286624203821653,ahead
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write4,measured,61443,,,-27.622151293522467,39.69465648854962,behind
+one-open-b22-fixed,two-open-mixed,"cross-session, same seed",write4,measured,61444,,,-19.037940343340377,2.962962962962945,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix4,measured,61441,20.73590243046617,24.836601307189543,20.73590243046619,27.737226277372272,split
+one-open-rc1,one-open-b22,"cross-session, same seed",mix4,measured,61442,-20.88059814019295,233.33333333333334,-20.880598140192962,6.015037593984962,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix4,measured,61443,6.1572947015203106,0.0,6.157294701520333,-1.4814814814814725,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",mix4,measured,61444,2.851792239411255,-6.369426751592355,2.851792239411277,-7.194244604316546,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",mix512,measured,61441,-23.758574348237925,145.4054054054054,-23.758574348237925,59.024390243902445,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix512,measured,61442,6.65628185060978,-23.33333333333334,6.65628185060978,-44.08163265306122,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",mix512,measured,61443,-55.61827050507472,295.0310559006211,-55.61827050507472,388.3435582822086,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix512,measured,61444,-19.018775813439483,41.01382488479264,-19.018775813439493,209.55414012738856,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix64,measured,61441,-27.423439292442573,234.22818791946307,-27.423439292442573,137.97468354430382,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix64,measured,61442,-16.43996854530474,55.900621118012396,-16.43996854530474,6.763285024154597,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix64,measured,61443,10.199630524338477,102.54777070063695,10.199630524338477,-13.654618473895574,split
+one-open-rc1,one-open-b22,"cross-session, same seed",mix64,measured,61444,-0.6071740243784762,-58.13397129186604,-0.6071740243784651,19.25133689839573,split
+one-open-rc1,one-open-b22,"cross-session, same seed",mix8,measured,61441,9.374070317336436,398.3957219251337,9.374070317336436,-15.771812080536918,split
+one-open-rc1,one-open-b22,"cross-session, same seed",mix8,measured,61442,-13.398835065937309,12.834224598930488,-13.398835065937298,12.4031007751938,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix8,measured,61443,-17.720127069655135,410.49723756906076,-17.720127069655135,9.777777777777775,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",mix8,measured,61444,-0.11163370430077313,-24.505928853754945,-0.11163370430077313,12.757201646090532,split
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,cold,61441,-0.941619818908801,2.6490066225165476,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,cold,61442,16.60649805420249,-9.150326797385633,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,cold,61443,20.50400894069351,-9.32642487046632,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,cold,61444,-16.101695092467562,-10.582010582010593,,,split
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,repeat,61441,13.961038944481974,-10.191082802547758,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,repeat,61442,-7.06836637814604,6.20155038759691,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,repeat,61443,6.990881621583989,-10.256410256410254,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",read4,repeat,61444,-22.600151443481444,-9.38967136150235,,,split
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,cold,61441,-25.079872214520414,30.43478260869563,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,cold,61442,-13.939393936268086,8.163265306122437,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,cold,61443,-2.738225624651358,-2.6717557251908386,,,split
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,cold,61444,-16.770740401395123,4.6242774566473965,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,repeat,61441,-21.59810126996653,40.60150375939848,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,repeat,61442,-58.58835144302967,225.1700680272109,,,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,repeat,61443,95.4189944164108,-75.29069767441861,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",read512,repeat,61444,101.8703241668244,-42.57028112449799,,,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61441,,,-3.4137905321649398,-3.1648096081085875,split
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61442,,,-1.6024986635046146,12.895676318921057,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61443,,,3.640803321651176,-11.088884664027043,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61444,,,5.1429435549659175,-4.6859547077459425,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61441,,,-14.046784497447707,21.858746728033964,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61442,,,-18.685731814326402,11.620933848481464,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61443,,,-4.974622831803299,2.9885678640559243,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61444,,,8.435617734417033,-4.521411230531125,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",write1m,measured,61441,,,-49.505139664522424,163.49206349206344,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",write1m,measured,61442,,,-64.87576315717308,176.82119205298014,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",write1m,measured,61443,,,40.30229603187108,6.334841628959276,split
+one-open-rc1,one-open-b22,"cross-session, same seed",write1m,measured,61444,,,87.1535849898497,-85.49270072992701,ahead
+one-open-rc1,one-open-b22,"cross-session, same seed",write4,measured,61441,,,11.813153874957404,4.6242774566473965,split
+one-open-rc1,one-open-b22,"cross-session, same seed",write4,measured,61442,,,-10.232883294339757,2.7586206896551557,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",write4,measured,61443,,,-7.846461296390094,10.07194244604317,behind
+one-open-rc1,one-open-b22,"cross-session, same seed",write4,measured,61444,,,-20.497240370514657,18.045112781954884,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61441,34.35061377368767,17.17791411042946,34.35061377368767,22.377622377622373,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61442,-17.945355368570738,252.51798561151082,-17.945355368570738,17.01244813278009,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61443,6.167096428926833,-6.134969325153373,6.167096428926833,-6.99300699300699,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61444,0.11604501953603741,-8.695652173913048,0.11604501953605961,-4.444444444444451,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61441,-23.52513387924389,153.6312849162011,-23.52513387924389,102.48447204968944,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61442,-1.0453068289954626,-14.10788381742739,-1.0453068289954626,-8.053691275167784,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61443,-55.92927666620905,149.41176470588232,-55.92927666620905,88.62559241706163,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61444,-19.342482109327097,13.33333333333333,-19.342482109327086,103.34728033472804,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61441,-20.641308096363286,187.86127167630053,-20.641308096363275,97.20279720279721,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61442,-8.425693972324089,-45.19650655021835,-8.425693972324078,-2.643171806167388,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61443,9.084109964855713,83.8150289017341,9.084109964855713,-19.172932330827074,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61444,-0.5340446764067641,-58.53080568720379,-0.5340446764067641,10.945273631840791,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61441,-0.24945726223991604,359.11330049261085,-0.24945726223991604,-7.037037037037052,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61442,-9.082941476246454,1.9323671497584627,-9.082941476246443,0.0,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61443,-17.268870079244326,373.84615384615387,-17.268870079244326,4.219409282700415,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61444,15.26238403571487,-10.328638497652577,15.26238403571487,-1.4388489208633004,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,cold,61441,-4.6139361226647075,1.3071895424836555,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,cold,61442,-3.4897715827152065,10.756972111553797,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,cold,61443,5.727376593569167,2.3391812865497075,,,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,cold,61444,-0.4708100397799231,-4.519774011299438,,,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61441,12.229437082270532,-4.081632653061218,,,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61442,2.549246687372997,3.007518796992481,,,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61443,4.863222072008533,-7.407407407407418,,,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61444,-20.030234387149235,9.039548022598876,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,cold,61441,-33.226837061449125,13.793103448275868,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,cold,61442,26.565656579830854,-16.753926701570688,,,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,cold,61443,-5.257393202737159,7.594936708860778,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,cold,61444,-16.85994647200494,1.1173184357541999,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61441,-4.272151893919885,1.08108108108107,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61442,-55.08390919537618,204.45859872611467,,,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61443,-0.6703910630020182,-12.06896551724137,,,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61444,52.369077288924125,-25.90673575129533,,,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61441,,,-2.8084697557990923,4.239100989248112,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61442,,,-5.145473514867405,5.949688695312272,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61443,,,3.539649932097655,-3.600139811254799,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61444,,,6.057517781094157,-0.1501396034909619,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61441,,,-11.058692338498199,18.64147384624144,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61442,,,-10.612184852300643,5.605622805426602,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61443,,,0.10056814205776643,-3.5868936135614926,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61444,,,3.7540942563896396,-0.501072839784833,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61441,,,-41.08379925333083,221.29032258064512,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61442,,,-54.62557773027223,89.14027149321268,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61443,,,-0.5074510474053939,14.634146341463406,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61444,,,81.45392176101652,-40.22556390977444,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write4,measured,61441,,,18.11435733496247,23.129251700680275,split
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write4,measured,61442,,,-15.50864615397185,12.030075187969903,behind
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write4,measured,61443,,,10.091156539404867,-16.393442622950815,ahead
+one-open-rc1,one-open-b22-fixed,"cross-session, same seed",write4,measured,61444,,,-7.60532473327411,12.949640287769792,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix4,measured,61441,34.64194044834166,17.17791411042946,34.64194044834168,20.68965517241379,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix4,measured,61442,-5.434175095829152,204.3478260869565,-5.434175095829152,-2.758620689655167,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix4,measured,61443,-5.857319432840202,2.68456375838928,-5.857319432840214,0.0,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix4,measured,61444,-0.4860319919757994,-8.695652173913048,-0.4860319919757883,-11.034482758620701,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix512,measured,61441,-15.996301990174278,16.410256410256395,-15.996301990174278,-32.92181069958847,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix512,measured,61442,31.08775223753193,-27.622377622377627,31.08775223753193,-71.57676348547717,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix512,measured,61443,-52.18124834952831,219.5979899497487,-52.18124834952831,354.8571428571429,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix512,measured,61444,-19.3117397644193,37.21973094170403,-19.3117397644193,230.6122448979592,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix64,measured,61441,-13.438749700142028,9.691629955947123,-13.438749700142038,9.302325581395365,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix64,measured,61442,-8.093064205598921,53.98773006134967,-8.093064205598921,1.8433179723502446,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix64,measured,61443,19.405309522227697,-14.973262032085566,19.405309522227697,-0.9216589861751112,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix64,measured,61444,-0.0673163253080089,15.89403973509933,-0.0673163253079978,19.25133689839573,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix8,measured,61441,-4.8378164112026,345.933014354067,-4.8378164112026,-16.887417218543067,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix8,measured,61442,-0.7728528220834696,-2.7649769585253337,-0.7728528220834696,-3.9735099337748436,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix8,measured,61443,-8.477494766560255,359.7014925373134,-8.477494766560245,-7.142857142857151,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",mix8,measured,61444,5.184729237082708,-4.02010050251257,5.184729237082708,3.007518796992481,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,cold,61441,-12.711864646757808,-24.390243902439025,,,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,cold,61442,6.257521099736629,12.550607287449388,,,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,cold,61443,-9.163803058773079,6.060606060606055,,,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,cold,61444,-1.6949154783608589,-5.586592178770955,,,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,repeat,61441,1.0822509828390503,-1.3986013986013957,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,repeat,61442,41.251448659851775,-31.155778894472363,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,repeat,61443,6.28166167445352,-10.256410256410254,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read4,repeat,61444,1.7384728672513727,-9.38967136150235,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,cold,61441,-30.351437713821138,18.70503597122304,,,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,cold,61442,-4.343434329870832,3.9215686274509665,,,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,cold,61443,3.8335158776229727,-5.5555555555555465,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,cold,61444,-11.50758252152434,-11.707317073170731,,,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,repeat,61441,-8.860759503177452,20.645161290322566,,,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,repeat,61442,-53.01085884426753,208.38709677419357,,,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,repeat,61443,11.955307270077032,-13.265306122448973,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",read512,repeat,61444,10.349127184203066,-16.374269005847953,,,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61441,,,0.1390305355455812,-4.395171308870028,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61442,,,9.029544330753382,4.766988146948403,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61443,,,-17.36032458946394,15.54003974434719,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61444,,,10.388009017575639,-10.797794319509912,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61441,,,-5.252796937937864,13.775520934924156,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61442,,,-12.214648199054334,4.0324338128760795,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61443,,,-4.685087244907105,2.9952687615007356,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61444,,,11.69841715265212,-7.306571805462136,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write1m,measured,61441,,,-49.20870548055254,205.521472392638,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write1m,measured,61442,,,-27.148177315194943,31.44654088050316,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write1m,measured,61443,,,-21.798848384123836,66.66666666666666,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write1m,measured,61444,,,89.10395676427389,-70.98540145985402,ahead
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write4,measured,61441,,,6.350823421196816,26.573426573426584,split
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write4,measured,61442,,,-10.0310232401141,2.7586206896551557,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write4,measured,61443,,,-20.852634154827975,6.9930069930070005,behind
+one-open-rc1,pr-direct-sg1,"cross-session, same seed",write4,measured,61444,,,-10.266224304900717,12.949640287769792,behind
+one-open-rc1,stock,"cross-session, same seed",mix4,measured,61441,52.918848129222496,31.72413793103448,52.91884812922252,42.85714285714286,split
+one-open-rc1,stock,"cross-session, same seed",mix4,measured,61442,18.87055653126357,237.93103448275863,18.87055653126355,15.102040816326534,split
+one-open-rc1,stock,"cross-session, same seed",mix4,measured,61443,34.473371437523845,6.9930069930070005,34.473371437523866,13.191489361702136,split
+one-open-rc1,stock,"cross-session, same seed",mix4,measured,61444,47.126775634225005,-19.672131147540984,47.12677563422503,-19.875776397515544,ahead
+one-open-rc1,stock,"cross-session, same seed",mix512,measured,61441,133.66573415645888,196.73202614379082,133.66573415645888,206.10328638497654,split
+one-open-rc1,stock,"cross-session, same seed",mix512,measured,61442,256.64845870731784,26.993865030674847,256.6484587073178,21.777777777777786,split
+one-open-rc1,stock,"cross-session, same seed",mix512,measured,61443,63.43131888543137,300.0,63.43131888543139,589.1774891774892,split
+one-open-rc1,stock,"cross-session, same seed",mix512,measured,61444,164.13596121565172,94.90445859872614,164.13596121565172,335.8744394618834,split
+one-open-rc1,stock,"cross-session, same seed",mix64,measured,61441,126.50943029501968,181.35593220338984,126.50943029501964,128.34008097165994,split
+one-open-rc1,stock,"cross-session, same seed",mix64,measured,61442,156.6058656797499,27.411167512690348,156.60586567974994,-21.63120567375887,split
+one-open-rc1,stock,"cross-session, same seed",mix64,measured,61443,203.66892710714217,71.89189189189189,203.66892710714217,-23.758865248226957,split
+one-open-rc1,stock,"cross-session, same seed",mix64,measured,61444,215.33936377673558,-10.256410256410254,215.3393637767356,-17.407407407407405,ahead
+one-open-rc1,stock,"cross-session, same seed",mix8,measured,61441,29.684866852873792,382.9015544041451,29.684866852873792,-17.97385620915034,split
+one-open-rc1,stock,"cross-session, same seed",mix8,measured,61442,30.910396401441844,0.9569377990430672,30.910396401441844,-1.3605442176870763,split
+one-open-rc1,stock,"cross-session, same seed",mix8,measured,61443,21.452390298538138,359.7014925373134,21.452390298538138,-4.263565891472865,split
+one-open-rc1,stock,"cross-session, same seed",mix8,measured,61444,45.99998036277619,-22.672064777327925,45.99998036277619,7.4509803921568585,split
+one-open-rc1,stock,"cross-session, same seed",read4,cold,61441,-20.715630939468156,26.530612244897966,,,behind
+one-open-rc1,stock,"cross-session, same seed",read4,cold,61442,19.494584629213985,-13.66459627329194,,,ahead
+one-open-rc1,stock,"cross-session, same seed",read4,cold,61443,-3.207331062575114,4.79041916167664,,,behind
+one-open-rc1,stock,"cross-session, same seed",read4,cold,61444,-25.612052884773682,-7.650273224043724,,,split
+one-open-rc1,stock,"cross-session, same seed",read4,repeat,61441,-2.16450238901299,18.98734177215191,,,behind
+one-open-rc1,stock,"cross-session, same seed",read4,repeat,61442,0.6952489977713361,10.040160642570296,,,split
+one-open-rc1,stock,"cross-session, same seed",read4,repeat,61443,-26.342451694637546,72.41379310344827,,,behind
+one-open-rc1,stock,"cross-session, same seed",read4,repeat,61444,-47.92139087379154,49.61240310077522,,,behind
+one-open-rc1,stock,"cross-session, same seed",read512,cold,61441,20.127795520443883,-32.098765432098766,,,ahead
+one-open-rc1,stock,"cross-session, same seed",read512,cold,61442,52.12121212014957,-33.47280334728035,,,ahead
+one-open-rc1,stock,"cross-session, same seed",read512,cold,61443,62.97918950293462,-44.32314410480349,,,ahead
+one-open-rc1,stock,"cross-session, same seed",read512,cold,61444,32.5602141204534,-27.30923694779116,,,ahead
+one-open-rc1,stock,"cross-session, same seed",read512,repeat,61441,-37.65822785059786,64.75770925110132,,,behind
+one-open-rc1,stock,"cross-session, same seed",read512,repeat,61442,-59.23000988755875,310.3004291845494,,,behind
+one-open-rc1,stock,"cross-session, same seed",read512,repeat,61443,-7.150837989151093,13.333333333333353,,,behind
+one-open-rc1,stock,"cross-session, same seed",read512,repeat,61444,-0.8728179697910066,25.991189427312776,,,behind
+one-open-rc1,stock,"cross-session, same seed",txn4_batch,measured,61441,,,10.895759740907728,10.135215159889466,split
+one-open-rc1,stock,"cross-session, same seed",txn4_batch,measured,61442,,,14.864354806235669,21.2447814603391,split
+one-open-rc1,stock,"cross-session, same seed",txn4_batch,measured,61443,,,7.765025739064169,8.619958394765014,split
+one-open-rc1,stock,"cross-session, same seed",txn4_batch,measured,61444,,,5.289101972276411,20.97419313660829,split
+one-open-rc1,stock,"cross-session, same seed",txn4_sync,measured,61441,,,-9.282328453523746,17.16588879013683,behind
+one-open-rc1,stock,"cross-session, same seed",txn4_sync,measured,61442,,,-16.1465740662896,10.540264581443036,behind
+one-open-rc1,stock,"cross-session, same seed",txn4_sync,measured,61443,,,2.1089191015659425,0.404839665277712,split
+one-open-rc1,stock,"cross-session, same seed",txn4_sync,measured,61444,,,8.28869300159727,-1.7432979661358483,ahead
+one-open-rc1,stock,"cross-session, same seed",write1m,measured,61441,,,143.07592310060383,-42.093023255813954,ahead
+one-open-rc1,stock,"cross-session, same seed",write1m,measured,61442,,,186.96146870547642,582.4489795918369,split
+one-open-rc1,stock,"cross-session, same seed",write1m,measured,61443,,,482.71640102108756,264.34108527131787,split
+one-open-rc1,stock,"cross-session, same seed",write1m,measured,61444,,,465.2803358978348,-58.376963350785346,ahead
+one-open-rc1,stock,"cross-session, same seed",write4,measured,61441,,,85.76133439812163,13.836477987421404,split
+one-open-rc1,stock,"cross-session, same seed",write4,measured,61442,,,75.8799267841357,-19.45945945945946,ahead
+one-open-rc1,stock,"cross-session, same seed",write4,measured,61443,,,61.314154621009244,0.0,ahead
+one-open-rc1,stock,"cross-session, same seed",write4,measured,61444,,,67.31700705085876,-4.848484848484846,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",mix4,measured,61441,27.671442867753516,21.65605095541403,27.671442867753537,25.899280575539585,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix4,measured,61442,-20.601268131598673,262.96296296296293,-20.60126813159866,22.077922077922096,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix4,measured,61443,-6.224151966024294,-8.38323353293412,-6.224151966024283,-10.738255033557031,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix4,measured,61444,-0.1228585439280061,-11.976047904191612,-0.1228585439280061,-16.774193548387107,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix512,measured,61441,0.6337805343481051,70.6766917293233,0.6337805343481051,-21.25603864734299,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix512,measured,61442,-0.34633802345429565,-5.479452054794532,-0.34633802345430675,-12.73885350318471,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix512,measured,61443,-41.889657571731945,168.35443037974684,-41.88965757173193,199.2481203007519,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix512,measured,61444,-24.622643184592274,20.948616600790505,-24.622643184592274,110.3896103896104,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix64,measured,61441,-26.93568671689457,253.19148936170208,-26.93568671689456,189.23076923076928,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix64,measured,61442,-16.902317046825466,57.86163522012578,-16.902317046825456,13.33333333333333,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix64,measured,61443,-0.7751440995931169,122.37762237762233,-0.775144099593128,2.8708133971291794,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix64,measured,61444,-0.9485101193830947,-2.2346368715083775,-0.9485101193830947,9.852216748768484,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix8,measured,61441,-0.33357737053218983,458.08383233532936,-0.33357737053218983,-1.5686274509804088,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix8,measured,61442,-13.220499481031789,11.640211640211628,-13.220499481031789,7.407407407407396,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",mix8,measured,61443,-0.009529284107290259,346.37681159420293,-0.009529284107290259,-13.636363636363647,split
+one-open-rc1,two-open-direct,"cross-session, same seed",mix8,measured,61444,15.599691447225993,-25.968992248062005,15.599691447225993,0.0,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,cold,61441,-1.6949154783608589,4.026845637583909,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,cold,61442,1.2033693767335318,2.962962962962945,,,split
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,cold,61443,20.73310427828805,-10.256410256410254,,,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,cold,61444,-13.088512504927586,-13.333333333333341,,,split
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,repeat,61441,12.98701281528194,-2.758620689655167,,,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,repeat,61442,-2.6651219133533743,12.757201646090532,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,repeat,61443,7.193515969307107,-10.256410256410254,,,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",read4,repeat,61444,-35.90325035682611,3.208556149732633,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,cold,61441,-0.8785942672255853,-9.836065573770492,,,split
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,cold,61442,-0.5050504982166859,0.0,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,cold,61443,-4.271631989897429,0.7905138339920903,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,cold,61444,-10.169491523834163,2.259887005649719,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,repeat,61441,-30.85443038747445,52.65306122448978,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,repeat,61442,-51.28331689255343,200.6289308176101,,,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,repeat,61443,27.374301686654047,-13.265306122448973,,,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",read512,repeat,61444,100.37406481826423,-49.29078014184397,,,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61441,,,-5.911133665307544,6.096389895129151,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61442,,,10.727604539240932,-0.4372769887357464,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61443,,,2.3176783845321847,-0.6291399905767547,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61444,,,9.440347310322661,-13.634879287954604,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61441,,,-14.201491464863858,21.818082402816398,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61442,,,-18.744676587034615,11.836685581594985,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61443,,,-5.248040870286319,3.2279043002762187,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61444,,,5.627445710986678,-1.1303872251447133,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",write1m,measured,61441,,,-53.38348267417932,350.6787330316742,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",write1m,measured,61442,,,-48.77782675276904,62.01550387596902,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",write1m,measured,61443,,,-14.782267851700048,5.3811659192825045,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",write1m,measured,61444,,,-24.07161945955557,81.7142857142857,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",write4,measured,61441,,,5.855377560210573,26.573426573426584,split
+one-open-rc1,two-open-direct,"cross-session, same seed",write4,measured,61442,,,0.160509926410346,-17.679558011049735,ahead
+one-open-rc1,two-open-direct,"cross-session, same seed",write4,measured,61443,,,-10.260773547974678,6.9930069930070005,behind
+one-open-rc1,two-open-direct,"cross-session, same seed",write4,measured,61444,,,0.03848479664834148,2.614379084967311,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix4,measured,61441,20.901256582917817,17.17791411042946,20.90125658291784,19.047619047619047,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix4,measured,61442,-27.963874436035695,233.33333333333334,-27.963874436035706,7.6335877862595325,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix4,measured,61443,-17.623363864948505,13.33333333333333,-17.623363864948505,16.157205240174676,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix4,measured,61444,-19.50812073599888,8.888888888888879,-19.50812073599888,10.729613733905573,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix512,measured,61441,-22.490558621159153,65.6934306569343,-22.490558621159153,-1.2121212121212088,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix512,measured,61442,31.50386391588489,-27.622377622377627,31.50386391588489,-52.09790209790211,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix512,measured,61443,-51.895046165001766,155.42168674698797,-51.89504616500178,227.57201646090536,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix512,measured,61444,-23.08170982850154,47.82608695652175,-23.081709828501552,151.8134715025907,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix64,measured,61441,-27.119327147761407,194.67455621301775,-27.119327147761407,157.53424657534248,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix64,measured,61442,-0.45269584786280515,48.5207100591716,-0.45269584786280515,2.7906976744186185,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix64,measured,61443,0.8652763266099317,116.32653061224487,0.8652763266099317,6.965174129353224,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix64,measured,61444,0.7808927394127751,-5.405405405405405,0.7808927394127974,-4.29184549356223,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix8,measured,61441,-4.2060605933821655,393.1216931216931,-4.2060605933821655,-15.771812080536918,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix8,measured,61442,-12.230669894134882,8.20512820512822,-12.230669894134882,10.687022900763354,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix8,measured,61443,-8.394013209064955,359.7014925373134,-8.394013209064944,-9.85401459854015,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",mix8,measured,61444,6.008071793402769,-23.90438247011951,6.008071793402769,-5.517241379310345,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,cold,61441,-20.05649734578795,22.529644268774685,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,cold,61442,-0.8423587274680511,14.403292181069949,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,cold,61443,-20.38946181964364,12.903225806451601,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,cold,61444,-21.468926783617437,-8.64864864864865,,,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,repeat,61441,-8.1168832431886,12.350597609561763,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,repeat,61442,-3.2444961948874917,6.20155038759691,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,repeat,61443,-9.523809302030573,46.44351464435146,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read4,repeat,61444,-31.97278917722759,57.55102040816327,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,cold,61441,18.690095854327815,-27.312775330396477,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,cold,61442,51.717171742958534,-36.14457831325301,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,cold,61443,62.541073364275746,-43.33333333333332,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,cold,61444,33.898305077045386,-30.916030534351147,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,repeat,61441,87.42088608410954,-44.01197604790419,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,repeat,61442,-60.61204344850973,324.88888888888897,,,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,repeat,61443,167.2625698829305,-59.90566037735848,,,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",read512,repeat,61444,4.239401497861173,21.702127659574487,,,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61441,,,-8.46860675313289,3.2352070458498305,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61442,,,7.256465627124897,-1.1307383669428406,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61443,,,-2.0596998326519844,0.3648375026826356,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61444,,,6.005244400977272,-1.1327873698120383,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61441,,,2.702411366364932,2.4587682068275996,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61442,,,-15.437024747065308,10.314652313755257,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61443,,,-3.11862610976672,2.3123200714310066,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61444,,,2.232936853458578,-0.40749539955705627,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",write1m,measured,61441,,,-40.913971614240566,191.22807017543857,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",write1m,measured,61442,,,-59.01418140495659,162.89308176100633,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",write1m,measured,61443,,,-20.517336196958347,34.28571428571428,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",write1m,measured,61444,,,42.33914627595459,-85.05639097744361,ahead
+one-open-rc1,two-open-mixed,"cross-session, same seed",write4,measured,61441,,,-5.462727354438613,38.167938931297705,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",write4,measured,61442,,,-5.0612808011329165,-5.095541401273884,split
+one-open-rc1,two-open-mixed,"cross-session, same seed",write4,measured,61443,,,-20.318389280698213,16.793893129770975,behind
+one-open-rc1,two-open-mixed,"cross-session, same seed",write4,measured,61444,,,-25.19536789097645,16.296296296296298,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix4,measured,61441,-10.328162214217985,6.5359477124183,-10.328162214217972,5.8394160583941535,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix4,measured,61442,-16.334043572312275,9.523809523809534,-16.334043572312286,9.022556390977442,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix4,measured,61443,12.762133032519184,-2.614379084967333,12.762133032519207,-1.4814814814814725,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix4,measured,61444,3.3541263585408654,2.547770700636942,3.3541263585408654,4.316546762589946,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix512,measured,61441,-9.240393627856369,110.81081081081079,-9.240393627856381,137.0731707317073,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix512,measured,61442,-18.63749280150303,5.9259259259259345,-18.637492801503043,96.73469387755102,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix512,measured,61443,-7.187603266327658,23.60248447204969,-7.1876032663276685,7.361963190184051,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix512,measured,61444,0.36308125881567843,2.764976958525356,0.3630812588156562,-6.369426751592355,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix64,measured,61441,-16.155831326206595,204.69798657718124,-16.15583132620658,117.72151898734178,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix64,measured,61442,-9.08190907199662,1.2422360248447228,-9.08190907199662,4.8309178743961345,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix64,measured,61443,-7.709606075913689,138.21656050955414,-7.709606075913689,-12.851405622489953,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix64,measured,61444,-0.5402213562360147,-63.8755980861244,-0.5402213562360036,0.0,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix8,measured,61441,14.93438484971048,11.764705882352944,14.93438484971048,1.3422818791946511,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix8,measured,61442,-12.724322529614962,16.042780748663098,-12.724322529614962,17.054263565891482,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix8,measured,61443,-10.098753612043698,11.049723756906072,-10.098753612043708,18.22222222222223,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",mix8,measured,61444,-5.035296453961169,-21.34387351778656,-5.03529645396118,9.4650205761317,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,cold,61441,13.484358189365109,35.761589403973495,,,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,cold,61442,9.739524174248327,-19.281045751633997,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,cold,61443,32.66078171311193,-14.507772020725385,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,cold,61444,-14.65517239948606,-5.291005291005302,,,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,repeat,61441,12.740899452100042,-8.917197452229297,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,repeat,61442,-34.20836776998796,54.2635658914729,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,repeat,61443,0.6673022758176606,0.0,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read4,repeat,61444,-23.922734069824216,0.0,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,cold,61441,7.56880734686296,9.881422924901173,,,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,cold,61442,-10.031678995761606,4.081632653061229,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,cold,61443,-6.329113915414086,3.0534351145037997,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,cold,61444,-5.947580628759475,18.497109826589586,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,repeat,61441,-13.975694440018016,16.541353383458635,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,repeat,61442,-11.86974790681341,5.442176870748305,,,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,repeat,61443,74.55089819457055,-71.51162790697674,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",read512,repeat,61444,82.9378530831941,-31.32530120481927,,,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61441,,,-3.5478884194404148,1.286924225068553,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61442,,,-9.751524744526574,7.758825862752872,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61443,,,25.412887704103436,-23.047356109012462,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_batch,measured,61444,,,-4.751481170182736,6.851668706103209,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61441,,,-9.281527343608797,7.1045385920343485,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61442,,,-7.371484515942173,7.294359804419148,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61443,,,-0.3037673523765827,-0.00650602452462179,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",txn4_sync,measured,61444,,,-2.9210793683638325,3.004701227670359,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write1m,measured,61441,,,-0.5836318738763002,-13.756613756613756,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write1m,measured,61442,,,-51.786742529706274,110.5960264900662,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write1m,measured,61443,,,79.41205868813232,-36.19909502262443,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write1m,measured,61444,,,-1.031375444383431,-50.0,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write4,measured,61441,,,5.136143076323263,-17.34104046242775,ahead
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write4,measured,61442,,,-0.2243662887979614,0.0,behind
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write4,measured,61443,,,16.432856254345275,2.877697841726623,split
+pr-direct-sg1,one-open-b22,"cross-session, same seed",write4,measured,61444,,,-11.401521875527953,4.5112781954887105,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix4,measured,61441,-0.21637141717054664,0.0,-0.21637141717055774,1.3986013986013957,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix4,measured,61442,-13.23012862777848,15.827338129496415,-13.23012862777848,20.331950207468875,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix4,measured,61443,12.77254459860957,-8.58895705521473,12.772544598609592,-6.99300699300699,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,mix4,measured,61444,0.6050175905590427,0.0,0.6050175905590427,7.407407407407396,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix512,measured,61441,-8.962500541570172,117.87709497206707,-8.962500541570185,201.86335403726704,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix512,measured,61442,-24.512632582410955,18.672199170124482,-24.512632582410955,223.4899328859061,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix512,measured,61443,-7.837988628554626,-21.96078431372549,-7.837988628554626,-58.53080568720379,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix512,measured,61444,-0.03810014594197719,-17.407407407407405,-0.03810014594196609,-38.49372384937239,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix64,measured,61441,-8.32076520529773,162.4277456647399,-8.32076520529771,80.4195804195804,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix64,measured,61442,-0.36192020096206257,-64.41048034934498,-0.36192020096205146,-4.405286343612335,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix64,measured,61443,-8.64383635758732,116.18497109826586,-8.64383635758731,-18.42105263157896,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix64,measured,61444,-0.46704274711372173,-64.21800947867298,-0.46704274711373284,-6.9651741293532465,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix8,measured,61441,4.821620286467265,2.9556650246305383,4.821620286467265,11.851851851851869,split
+pr-direct-sg1,one-open-b22-fixed,same-session,mix8,measured,61442,-8.374813637706225,4.8309178743961345,-8.374813637706225,4.137931034482767,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix8,measured,61443,-9.60569784476567,3.076923076923088,-9.605697844765682,12.23628691983123,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,mix8,measured,61444,9.580910529243724,-6.572769953051639,9.580910529243702,-4.316546762589912,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,cold,61441,9.277238528835552,33.986928104575156,,,split
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,cold,61442,-9.173273177813668,-1.5936254980079667,,,split
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,cold,61443,16.3934424312999,-3.5087719298245723,,,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,cold,61444,1.2452107076022845,1.1299435028248483,,,split
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,repeat,61441,11.027837222702885,-2.7210884353741416,,,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,repeat,61442,-27.39950799773936,49.624060150375946,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,repeat,61443,-1.3346042770668642,3.1746031746031633,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read4,repeat,61444,-21.396730893341076,20.33898305084747,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,cold,61441,-4.1284403485792875,-4.137931034482767,,,split
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,cold,61442,32.31256599394485,-19.895287958115183,,,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,cold,61443,-8.75527425178838,13.924050632911399,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,cold,61444,-6.048387085574292,14.525139664804465,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,repeat,61441,5.034722238460532,-16.216216216216218,,,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,repeat,61442,-4.411764718657219,-1.273885350318471,,,split
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,repeat,61443,-11.277445117113793,1.379310344827589,,,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,read512,repeat,61444,38.07909602635839,-11.398963730569944,,,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_batch,measured,61441,,,-2.943408055362018,9.031209423545805,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_batch,measured,61442,,,-13.001079599690213,1.1288866553126553,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_batch,measured,61443,,,25.290484767437714,-16.56584124252771,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_batch,measured,61444,,,-3.9229724994786275,11.936537482220299,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_sync,measured,61441,,,-6.127774976911249,4.276801258594509,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_sync,measured,61442,,,1.8254336445416186,1.5122101203363325,split
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_sync,measured,61443,,,5.020888388432354,-6.3907424624563225,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,txn4_sync,measured,61444,,,-7.112296752965996,7.341943326763634,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,write1m,measured,61441,,,15.99665120586906,5.161290322580658,split
+pr-direct-sg1,one-open-b22-fixed,same-session,write1m,measured,61442,,,-37.71683315866897,43.891402714932106,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,write1m,measured,61443,,,27.226449862658963,-31.219512195121947,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,write1m,measured,61444,,,-4.045412446231078,106.01503759398496,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,write4,measured,61441,,,11.061065194744014,-2.7210884353741416,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,write4,measured,61442,,,-6.08834635129476,9.022556390977442,behind
+pr-direct-sg1,one-open-b22-fixed,same-session,write4,measured,61443,,,39.096425211124576,-21.857923497267763,ahead
+pr-direct-sg1,one-open-b22-fixed,same-session,write4,measured,61444,,,2.9653266576767257,0.0,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix4,measured,61441,-25.72893730808403,-14.65968586387435,-25.728937308084042,-17.14285714285714,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix4,measured,61442,5.746447092631968,-67.14285714285714,5.7464470926319455,2.8368794326240954,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix4,measured,61443,6.2217470307335265,-2.614379084967333,6.2217470307335265,0.0,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix4,measured,61444,0.4884058004164915,9.523809523809534,0.4884058004164693,12.4031007751938,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix512,measured,61441,19.042378334705255,-14.09691629955947,19.042378334705234,49.079754601227,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix512,measured,61442,-23.715222594709463,38.164251207729485,-23.715222594709463,251.8248175182482,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix512,measured,61443,109.12298324085081,-68.71069182389937,109.12298324085081,-78.01507537688443,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix512,measured,61444,23.933766458758644,-27.12418300653595,23.933766458758644,-69.75308641975309,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix64,measured,61441,15.525133536760016,-8.835341365461847,15.525133536760016,-8.510638297872353,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix64,measured,61442,8.805716495328909,-35.05976095617529,8.805716495328909,-1.8099547511312264,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix64,measured,61443,-16.251630350336587,17.610062893081757,-16.251630350336587,0.9302325581395321,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix64,measured,61444,0.06736167070939825,-13.714285714285712,0.06736167070939825,-16.143497757847534,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix8,measured,61441,5.083759355614559,-77.57510729613733,5.083759355614559,20.31872509960162,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix8,measured,61442,0.7788723590911317,2.843601895734582,0.7788723590911317,4.137931034482767,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix8,measured,61443,9.26274334923125,-78.24675324675324,9.26274334923123,7.692307692307709,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",mix8,measured,61444,-4.929165359542365,4.188481675392675,-4.929165359542376,-2.9197080291970767,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,cold,61441,14.563107111080754,32.258064516129025,,,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,cold,61442,-5.889014758647648,-11.151079136690644,,,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,cold,61443,10.088272480960715,-5.714285714285716,,,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,cold,61444,1.7241381629530705,5.9171597633136175,,,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,repeat,61441,-1.0706637142684827,1.4184397163120588,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,repeat,61442,-29.20426590398345,45.25547445255476,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,repeat,61443,-5.910390913622143,11.428571428571432,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read4,repeat,61444,-1.7087664265609037,10.362694300518127,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,cold,61441,43.577981680526534,-15.75757575757576,,,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,cold,61442,4.540654684226397,-3.7735849056603654,,,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,cold,61443,-3.6919831185733054,5.882352941176472,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,cold,61444,13.004032265615706,13.25966850828728,,,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,repeat,61441,9.722222233667143,-17.112299465240643,,,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,repeat,61442,112.81512609174476,-67.57322175732217,,,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,repeat,61443,-10.678642720560328,15.294117647058814,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",read512,repeat,61444,-9.378531075218676,19.580419580419584,,,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61441,,,-0.13883750901326763,4.5972273252740115,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61442,,,-8.28174086774245,-4.550086082709681,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61443,,,21.007251666008607,-13.449917257023857,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61444,,,-9.410450564355855,12.10485126139831,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61441,,,5.544012665468467,-12.107631608035707,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61442,,,13.914221391686388,-3.876131380458958,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61443,,,4.915376943107752,-2.9081615083083934,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61444,,,-10.473216587003675,7.882513299786109,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write1m,measured,61441,,,96.88413328727235,-67.26907630522088,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write1m,measured,61442,,,37.26492531649086,-23.923444976076567,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write1m,measured,61443,,,27.875354689403697,-39.99999999999999,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write1m,measured,61444,,,-47.119033514114015,244.65408805031447,behind
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write4,measured,61441,,,-5.971578984437864,-20.994475138121548,split
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write4,measured,61442,,,11.149424614315052,-2.684563758389258,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write4,measured,61443,,,26.346592754103625,-6.5359477124183,ahead
+pr-direct-sg1,one-open-rc1,"cross-session, same seed",write4,measured,61444,,,11.440758204339541,-11.46496815286624,ahead
+pr-direct-sg1,stock,"cross-session, same seed",mix4,measured,61441,13.574453561810596,12.413793103448278,13.574453561810596,18.36734693877551,split
+pr-direct-sg1,stock,"cross-session, same seed",mix4,measured,61442,25.7013901710498,11.03448275862069,25.701390171049752,18.36734693877551,split
+pr-direct-sg1,stock,"cross-session, same seed",mix4,measured,61443,42.83996443206524,4.195804195804187,42.83996443206526,13.191489361702136,split
+pr-direct-sg1,stock,"cross-session, same seed",mix4,measured,61444,47.84535134038832,-12.021857923497258,47.84535134038832,-9.937888198757772,ahead
+pr-direct-sg1,stock,"cross-session, same seed",mix512,measured,61441,178.16124729309843,154.9019607843137,178.16124729309837,356.3380281690141,split
+pr-direct-sg1,stock,"cross-session, same seed",mix512,measured,61442,172.06848284427699,75.46012269938652,172.06848284427693,328.44444444444446,split
+pr-direct-sg1,stock,"cross-session, same seed",mix512,measured,61443,241.7724496030821,25.15723270440253,241.77244960308215,51.515151515151516,split
+pr-direct-sg1,stock,"cross-session, same seed",mix512,measured,61444,227.35364530660308,42.03821656050957,227.35364530660308,31.838565022421527,split
+pr-direct-sg1,stock,"cross-session, same seed",mix64,measured,61441,161.67532182167582,156.49717514124296,161.67532182167582,108.90688259109314,split
+pr-direct-sg1,stock,"cross-session, same seed",mix64,measured,61442,179.20185072189318,-17.25888324873096,179.20185072189318,-23.04964539007093,ahead
+pr-direct-sg1,stock,"cross-session, same seed",mix64,measured,61443,154.31777558485638,102.16216216216213,154.31777558485638,-23.04964539007093,split
+pr-direct-sg1,stock,"cross-session, same seed",mix64,measured,61444,215.55178164058,-22.564102564102562,215.55178164057995,-30.740740740740748,ahead
+pr-direct-sg1,stock,"cross-session, same seed",mix8,measured,61441,36.27773340432305,8.290155440414516,36.27773340432305,-1.3071895424836555,split
+pr-direct-sg1,stock,"cross-session, same seed",mix8,measured,61442,31.930021294189316,3.8277511961722466,31.93002129418929,2.7210884353741527,split
+pr-direct-sg1,stock,"cross-session, same seed",mix8,measured,61443,32.70221350339835,0.0,32.702213503398326,3.100775193798455,split
+pr-direct-sg1,stock,"cross-session, same seed",mix8,measured,61444,38.80339990579556,-19.433198380566797,38.80339990579558,4.313725490196085,split
+pr-direct-sg1,stock,"cross-session, same seed",read4,cold,61441,-9.169363350838323,67.34693877551021,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read4,cold,61442,12.457530904614856,-23.291925465838514,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read4,cold,61443,6.557377121426522,-1.19760479041916,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read4,cold,61444,-24.32950189992271,-2.1857923497267895,,,split
+pr-direct-sg1,stock,"cross-session, same seed",read4,repeat,61441,-3.21199156160783,20.67510548523208,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read4,repeat,61442,-28.712059272216038,59.83935742971889,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read4,repeat,61443,-30.69590073687454,92.11822660098521,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read4,repeat,61444,-48.81129266196007,65.11627906976744,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read512,cold,61441,72.4770642455633,-42.79835390946503,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read512,cold,61442,59.02851106398512,-35.98326359832637,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read512,cold,61443,56.96202533969868,-41.04803493449782,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read512,cold,61444,49.79838713604643,-17.670682730923694,,,ahead
+pr-direct-sg1,stock,"cross-session, same seed",read512,repeat,61441,-31.59722221782657,36.5638766519824,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read512,repeat,61442,-13.235294134616304,33.047210300429185,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read512,repeat,61443,-17.065868269323868,30.666666666666664,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",read512,repeat,61444,-10.169491540482746,50.660792951541865,,,behind
+pr-direct-sg1,stock,"cross-session, same seed",txn4_batch,measured,61441,,,10.741794830482121,15.198381365969226,split
+pr-direct-sg1,stock,"cross-session, same seed",txn4_batch,measured,61442,,,5.351586591778967,15.728039533100446,split
+pr-direct-sg1,stock,"cross-session, same seed",txn4_batch,measured,61443,,,30.403495904008302,-5.989336133944622,ahead
+pr-direct-sg1,stock,"cross-session, same seed",txn4_batch,measured,61444,,,-4.619076918478893,35.61793928047143,behind
+pr-direct-sg1,stock,"cross-session, same seed",txn4_sync,measured,61441,,,-4.252929253169013,2.97987460514626,behind
+pr-direct-sg1,stock,"cross-session, same seed",txn4_sync,measured,61442,,,-4.479022737359362,6.255578697959363,behind
+pr-direct-sg1,stock,"cross-session, same seed",txn4_sync,measured,61443,,,7.127957367940851,-2.515095234346665,ahead
+pr-direct-sg1,stock,"cross-session, same seed",txn4_sync,measured,61444,,,-3.0526163556955033,6.001799639614713,behind
+pr-direct-sg1,stock,"cross-session, same seed",write1m,measured,61441,,,378.5779244266605,-81.04651162790697,ahead
+pr-direct-sg1,stock,"cross-session, same seed",write1m,measured,61442,,,293.89744570567746,419.18367346938777,split
+pr-direct-sg1,stock,"cross-session, same seed",write1m,measured,61443,,,645.1506646390438,118.60465116279073,split
+pr-direct-sg1,stock,"cross-session, same seed",write1m,measured,61444,,,198.92570497743773,43.455497382198935,split
+pr-direct-sg1,stock,"cross-session, same seed",write4,measured,61441,,,74.66844959199204,-10.062893081760993,ahead
+pr-direct-sg1,stock,"cross-session, same seed",write4,measured,61442,,,95.48952663264541,-21.62162162162162,ahead
+pr-direct-sg1,stock,"cross-session, same seed",write4,measured,61443,,,103.81493799373156,-6.5359477124183,ahead
+pr-direct-sg1,stock,"cross-session, same seed",write4,measured,61444,,,86.45934126228529,-15.75757575757576,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix4,measured,61441,-5.177062628017104,3.821656050955413,-5.177062628017104,4.316546762589946,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix4,measured,61442,-16.03866201256028,19.259259259259267,-16.03866201256028,25.54112554112553,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix4,measured,61443,-0.3896559254252252,-10.778443113772463,-0.3896559254252141,-10.738255033557031,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix4,measured,61444,0.3649472082336347,-3.59281437125748,0.3649472082336347,-6.451612903225801,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix512,measured,61441,19.79684575621563,46.61654135338345,19.79684575621563,17.391304347826097,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix512,measured,61442,-23.979425784971454,30.593607305936075,-23.979425784971465,207.0063694267516,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix512,measured,61443,21.52208165746805,-16.033755274261598,21.52208165746805,-34.21052631578948,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix512,measured,61444,-6.58200264160741,-11.857707509881433,-6.5820026416073985,-36.36363636363637,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix64,measured,61441,-15.59235451197577,221.98581560283682,-15.592354511975747,164.6153846153846,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix64,measured,61442,-9.584970671781656,2.515723270440251,-9.584970671781656,11.282051282051286,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix64,measured,61443,-16.90080089618139,161.5384615384615,-16.90080089618139,3.8277511961722466,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix64,measured,61444,-0.8817873809369603,-15.642458100558642,-0.8817873809369714,-7.881773399014779,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix8,measured,61441,4.733223714299739,25.149700598802415,4.733223714299739,18.43137254901961,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix8,measured,61442,-12.544597938132195,14.814814814814792,-12.544597938132195,11.851851851851869,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix8,measured,61443,9.252331391994083,-2.898550724637672,9.252331391994062,-6.99300699300699,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",mix8,measured,61444,9.901591500671469,-22.86821705426355,9.901591500671447,-2.9197080291970767,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,cold,61441,12.621359276163924,37.58389261744968,,,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,cold,61442,-4.756511982111,-8.518518518518526,,,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,cold,61443,32.91298881260418,-15.384615384615385,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,cold,61444,-11.590038381034862,-8.20512820512821,,,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,repeat,61441,11.777301867232847,-1.3793103448275779,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,repeat,61442,-31.091058527095772,63.78600823045269,,,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,repeat,61443,0.8579601414650861,0.0,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read4,repeat,61444,-36.99851409524546,13.903743315508033,,,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,cold,61441,42.31651376448325,-24.04371584699454,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,cold,61442,4.012671586904726,-3.7735849056603654,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,cold,61443,-7.805907176516136,6.71936758893279,,,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,cold,61444,1.512096782773109,15.819209039548031,,,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,repeat,61441,-24.1319444450097,26.530612244897966,,,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,repeat,61442,3.6764705828281397,-2.51572327044024,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,repeat,61443,13.77245509172762,0.0,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",read512,repeat,61444,81.58192088260449,-39.36170212765958,,,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61441,,,-6.041764303585451,10.973882122517287,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61442,,,1.5574312622423703,-4.967466592038061,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61443,,,23.811810581588144,-13.994438439437197,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_batch,measured,61444,,,-0.8584824707746019,-3.1805098840344104,split
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61441,,,-9.444811284892863,7.068797753510014,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61442,,,-7.438630994823825,7.501748716901568,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61443,,,-0.5906249180814949,0.22587012158215014,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",txn4_sync,measured,61444,,,-5.435145453644685,6.6630231512802895,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write1m,measured,61441,,,-8.219473894346807,47.51131221719458,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write1m,measured,61442,,,-29.689922146704863,23.25581395348837,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write1m,measured,61443,,,8.972477242904574,-36.77130044843049,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write1m,measured,61444,,,-59.84833853313161,526.2857142857142,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write4,measured,61441,,,-0.46585992007230903,0.0,behind
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write4,measured,61442,,,11.327830473969014,-19.889502762430944,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write4,measured,61443,,,13.382454986023262,0.0,ahead
+pr-direct-sg1,two-open-direct,"cross-session, same seed",write4,measured,61444,,,11.48364595351785,-9.150326797385633,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix4,measured,61441,-10.205351927986928,0.0,-10.205351927986928,-1.3605442176870763,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix4,measured,61442,-23.82435659292056,9.523809523809534,-23.82435659292057,10.687022900763354,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix4,measured,61443,-12.498097952197785,10.370370370370363,-12.498097952197773,16.157205240174676,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix4,measured,61444,-19.11499372880926,19.259259259259267,-19.11499372880927,24.463519313304726,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix512,measured,61441,-7.730917548683703,42.335766423357654,-7.730917548683703,47.272727272727266,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix512,measured,61442,0.31742986758898084,0.0,0.31742986758898084,68.53146853146852,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix512,measured,61443,0.598514546382356,-20.080321285140556,0.598514546382356,-27.9835390946502,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix512,measured,61444,-4.672265894784811,7.7294685990338285,-4.672265894784811,-23.834196891191716,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix64,measured,61441,-15.804505364962163,168.63905325443787,-15.804505364962163,135.61643835616434,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix64,measured,61442,8.31315753451718,-3.5502958579881505,8.313157534517156,0.9302325581395321,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix64,measured,61443,-15.526975533836273,154.421768707483,-15.526975533836273,7.96019900497511,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix64,measured,61444,0.8487804325179038,-18.37837837837837,0.8487804325179038,-19.742489270386265,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix8,measured,61441,0.6638727633135222,10.582010582010582,0.6638727633135222,1.3422818791946511,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix8,measured,61442,-11.547058842180846,11.282051282051286,-11.547058842180846,15.267175572519086,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix8,measured,61443,0.0912142399100313,0.0,0.0912142399100313,-2.9197080291970767,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",mix8,measured,61444,0.7827586402435527,-20.717131474103578,0.7827586402435749,-8.275862068965512,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,cold,61441,-8.414239425905368,62.055335968379424,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,cold,61442,-6.681766856334348,1.6460905349794164,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,cold,61443,-12.358133804450022,6.451612903225801,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,cold,61444,-20.11494258051717,-3.2432432432432434,,,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,repeat,61441,-9.10064243384272,13.94422310756973,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,repeat,61442,-31.501230802871383,54.2635658914729,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,repeat,61443,-14.8713058560348,63.179916317991626,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read4,repeat,61444,-33.135215316692936,73.87755102040816,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,cold,61441,70.41284408232617,-38.76651982378855,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,cold,61442,58.606124608481004,-38.55421686746987,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,cold,61443,56.54008437491882,-40.0,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,cold,61444,51.310483872376935,-21.755725190839705,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,repeat,61441,105.6423611415148,-53.59281437125749,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,repeat,61442,-16.176470599984338,37.77777777777778,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,repeat,61443,138.72255491934447,-53.77358490566038,,,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",read512,repeat,61444,-5.5367231642377,45.53191489361703,,,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61441,,,-8.595686659481983,7.98116419346484,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61442,,,-1.6262369200128468,-5.629374880586391,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61443,,,18.514865505947053,-13.134150096574636,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_batch,measured,61444,,,-3.9703267190012936,10.834941665362606,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61441,,,8.39624606025775,-9.946561997786308,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61442,,,-3.670745154975008,6.038711458177604,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61443,,,1.6434586045998234,-0.6630874391436281,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",txn4_sync,measured,61444,,,-8.474140046458844,7.442897021162964,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write1m,measured,61441,,,16.331014881174188,-4.678362573099415,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write1m,measured,61442,,,-43.74084671516124,100.0,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write1m,measured,61443,,,1.6387382547258023,-19.428571428571416,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write1m,measured,61444,,,-24.72968376151623,-48.49624060150376,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write4,measured,61441,,,-11.10809526020169,9.160305343511443,behind
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write4,measured,61442,,,5.523840125741009,-7.643312101910826,ahead
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write4,measured,61443,,,0.6750001954264118,9.160305343511443,split
+pr-direct-sg1,two-open-mixed,"cross-session, same seed",write4,measured,61444,,,-16.63715080573732,2.962962962962945,behind
+two-open-direct,one-open-b22,same-session,mix4,measured,61441,-5.43233496974842,2.614379084967311,-5.43233496974842,1.4598540145985384,behind
+two-open-direct,one-open-b22,same-session,mix4,measured,61442,-0.35180663723602956,-8.163265306122447,-0.35180663723605177,-13.157894736842113,split
+two-open-direct,one-open-b22,same-session,mix4,measured,61443,13.20323614995058,9.15032679738561,13.203236149950603,10.370370370370363,split
+two-open-direct,one-open-b22,same-session,mix4,measured,61444,2.978309891505626,6.369426751592355,2.9783098915056483,11.510791366906492,split
+two-open-direct,one-open-b22,same-session,mix512,measured,61441,-24.238734501542936,43.783783783783804,-24.238734501542925,101.95121951219512,behind
+two-open-direct,one-open-b22,same-session,mix512,measured,61442,7.026956897692527,-18.88888888888889,7.026956897692549,-35.91836734693877,ahead
+two-open-direct,one-open-b22,same-session,mix512,measured,61443,-23.625076638103636,47.204968944099356,-23.625076638103636,63.19018404907977,behind
+two-open-direct,one-open-b22,same-session,mix512,measured,61444,7.434417453607667,16.589861751152092,7.434417453607645,47.13375796178345,split
+two-open-direct,one-open-b22,same-session,mix64,measured,61441,-0.667566084769855,-5.369127516778505,-0.667566084769855,-17.721518987341767,split
+two-open-direct,one-open-b22,same-session,mix64,measured,61442,0.5563915684402954,-1.242236024844734,0.5563915684402954,-5.797101449275354,ahead
+two-open-direct,one-open-b22,same-session,mix64,measured,61443,11.06050951078943,-8.917197452229297,11.06050951078943,-16.06425702811244,ahead
+two-open-direct,one-open-b22,same-session,mix64,measured,61444,0.3446047055082335,-57.17703349282297,0.3446047055082557,8.556149732620334,split
+two-open-direct,one-open-b22,same-session,mix8,measured,61441,9.740138586050161,-10.6951871657754,9.740138586050161,-14.429530201342267,ahead
+two-open-direct,one-open-b22,same-session,mix8,measured,61442,-0.20550427674624894,1.0695187165775444,-0.20550427674624894,4.651162790697683,behind
+two-open-direct,one-open-b22,same-session,mix8,measured,61443,-17.712285639568336,14.364640883977886,-17.712285639568336,27.11111111111113,behind
+two-open-direct,one-open-b22,same-session,mix8,measured,61444,-13.591147999473119,1.9762845849802257,-13.59114799947313,12.757201646090532,behind
+two-open-direct,one-open-b22,same-session,read4,cold,61441,0.7662835173965377,-1.324503311258296,,,ahead
+two-open-direct,one-open-b22,same-session,read4,cold,61442,15.219976145389191,-11.764705882352944,,,ahead
+two-open-direct,one-open-b22,same-session,read4,cold,61443,-0.1897535385708915,1.0362694300518172,,,behind
+two-open-direct,one-open-b22,same-session,read4,cold,61444,-3.466955490447454,3.1746031746031633,,,behind
+two-open-direct,one-open-b22,same-session,read4,repeat,61441,0.862069104165486,-7.643312101910826,,,ahead
+two-open-direct,one-open-b22,same-session,read4,repeat,61442,-4.523809503180287,-5.813953488372093,,,split
+two-open-direct,one-open-b22,same-session,read4,repeat,61443,-0.18903601201134546,0.0,,,behind
+two-open-direct,one-open-b22,same-session,read4,repeat,61444,20.754716873168945,-12.20657276995305,,,ahead
+two-open-direct,one-open-b22,same-session,read512,cold,61441,-24.415793711138512,44.664031620553345,,,behind
+two-open-direct,one-open-b22,same-session,read512,cold,61442,-13.502538073865345,8.163265306122437,,,behind
+two-open-direct,one-open-b22,same-session,read512,cold,61443,1.6018306768629254,-3.435114503816794,,,ahead
+two-open-direct,one-open-b22,same-session,read512,cold,61444,-7.348560071117061,2.3121387283236983,,,behind
+two-open-direct,one-open-b22,same-session,read512,repeat,61441,13.38672769546636,-7.894736842105276,,,ahead
+two-open-direct,one-open-b22,same-session,read512,repeat,61442,-14.994934146819293,8.163265306122437,,,behind
+two-open-direct,one-open-b22,same-session,read512,repeat,61443,53.421052621076946,-71.51162790697674,,,ahead
+two-open-direct,one-open-b22,same-session,read512,repeat,61444,0.7467330414828277,13.25301204819278,,,split
+two-open-direct,one-open-b22,same-session,txn4_batch,measured,61441,,,2.65423873241184,-8.729043007393521,ahead
+two-open-direct,one-open-b22,same-session,txn4_batch,measured,61442,,,-11.135527815356882,13.391511305037685,behind
+two-open-direct,one-open-b22,same-session,txn4_batch,measured,61443,,,1.2931537912211022,-10.525967745935173,ahead
+two-open-direct,one-open-b22,same-session,txn4_batch,measured,61444,,,-3.9267088061876176,10.361734582697736,behind
+two-open-direct,one-open-b22,same-session,txn4_sync,measured,61441,,,0.18031428524518667,0.03338118973430504,split
+two-open-direct,one-open-b22,same-session,txn4_sync,measured,61442,,,0.07254265964660167,-0.19291678038518834,ahead
+two-open-direct,one-open-b22,same-session,txn4_sync,measured,61443,,,0.2885618840964721,-0.2318524606719774,ahead
+two-open-direct,one-open-b22,same-session,txn4_sync,measured,61444,,,2.6585628427614916,-3.4297939581379944,ahead
+two-open-direct,one-open-b22,same-session,write1m,measured,61441,,,8.319675583119345,-41.53439153439153,ahead
+two-open-direct,one-open-b22,same-session,write1m,measured,61442,,,-31.427671619290955,70.86092715231787,behind
+two-open-direct,one-open-b22,same-session,write1m,measured,61443,,,64.6397909154756,0.9049773755656076,split
+two-open-direct,one-open-b22,same-session,write1m,measured,61444,,,146.4869969011909,-92.01642335766424,ahead
+two-open-direct,one-open-b22,same-session,write4,measured,61441,,,5.6282226298404625,-17.34104046242775,ahead
+two-open-direct,one-open-b22,same-session,write4,measured,61442,,,-10.37673752698175,24.827586206896555,behind
+two-open-direct,one-open-b22,same-session,write4,measured,61443,,,2.6903644560333673,2.877697841726623,split
+two-open-direct,one-open-b22,same-session,write4,measured,61444,,,-20.527825075426374,15.037593984962406,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61441,5.231530838773923,-3.6809815950920255,5.231530838773901,-2.7972027972028135,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61442,3.3450317159094745,-2.877697841726612,3.3450317159094523,-4.149377593360992,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61443,13.213688444024175,2.4539877300613355,13.213688444024175,4.195804195804187,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix4,measured,61444,0.23919743795342008,3.7267080745341463,0.23919743795344228,14.814814814814813,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61441,-24.00676421507003,48.603351955307275,-24.00676421507002,157.1428571428571,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61442,-0.7013980135578635,-9.128630705394192,-0.7013980135578635,5.369127516778538,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61443,-24.16027596431349,-7.058823529411773,-24.16027596431349,-36.96682464454975,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix512,measured,61444,7.004969792448179,-6.296296296296289,7.004969792448157,-3.347280334728031,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61441,8.614846753082016,-18.497109826589586,8.614846753082016,-31.818181818181824,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61442,10.200793539908858,-65.28384279475983,10.200793539908858,-14.09691629955947,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61443,9.936274510032717,-17.34104046242775,9.936274510032739,-21.42857142857143,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix64,measured,61444,0.4184343349866504,-57.58293838862561,0.4184343349866504,0.995024875621886,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61441,0.084401653107391,-17.733990147783253,0.084401653107391,-5.5555555555555465,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61442,4.7678979252490095,-8.695652173913038,4.7678979252490095,-6.896551724137934,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61443,-17.260985643498728,6.153846153846154,-17.260985643498728,20.67510548523208,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",mix8,measured,61444,-0.2917891970889097,21.126760563380277,-0.2917891970889097,-1.4388489208633004,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,cold,61441,-2.9693485932167696,-2.614379084967333,,,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,cold,61442,-4.637336670065151,7.569721115537864,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,cold,61443,-12.428842755613157,14.035087719298245,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,cold,61444,14.517876553272725,10.169491525423723,,,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61441,-0.6704980635694358,-1.3605442176870763,,,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61442,5.357142992550501,-8.646616541353392,,,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61443,-2.1739131105334875,3.1746031746031633,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read4,repeat,61444,24.76415115905539,5.649717514124286,,,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,cold,61441,-32.63497178544112,26.206896551724146,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,cold,61442,27.208121832920096,-16.753926701570688,,,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,cold,61443,-1.029748269327746,6.7510548523206815,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,cold,61444,-7.447864942171522,-1.1173184357541888,,,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61441,38.44393594920832,-33.78378378378378,,,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61442,-7.801418447229647,1.273885350318471,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61443,-22.017543867402033,1.379310344827589,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",read512,repeat,61444,-23.957685129000993,46.11398963730571,,,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61441,,,3.297588790656336,-1.7505674865251009,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61442,,,-14.335249209227719,6.415017077551632,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61443,,,1.1942917068280545,-2.9898099104670117,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_batch,measured,61444,,,-3.091025944605552,15.613640753683233,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61441,,,3.66299971878723,-2.6076658685783904,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61442,,,10.00856484614805,-5.571573177231059,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61443,,,5.6448532161978315,-6.601701313255736,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",txn4_sync,measured,61444,,,-1.7735461100922834,0.6365094063764065,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61441,,,26.384818357152895,-28.70967741935484,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61442,,,-11.416444494219713,16.742081447963784,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61443,,,16.750993536712457,8.780487804878057,split
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write1m,measured,61444,,,138.98036606267704,-67.10526315789474,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write4,measured,61441,,,11.580875773438137,-2.7210884353741416,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write4,measured,61442,,,-15.644045833926556,36.09022556390977,behind
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write4,measured,61443,,,22.678967595357747,-21.857923497267763,ahead
+two-open-direct,one-open-b22-fixed,"cross-session, same seed",write4,measured,61444,,,-7.640868957042157,10.07194244604317,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",mix4,measured,61441,-21.673948571581946,-17.801047120418858,-21.67394857158196,-20.571428571428573,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix4,measured,61442,25.946595930202076,-72.44897959183673,25.946595930202054,-18.085106382978733,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix4,measured,61443,6.6372654542875775,9.15032679738561,6.6372654542875775,12.030075187969903,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix4,measured,61444,0.12300967181968492,13.605442176870742,0.12300967181968492,20.155038759689937,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix512,measured,61441,-0.6297890539169293,-41.40969162995594,-0.6297890539169182,26.993865030674847,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix512,measured,61442,0.3475416924827224,5.797101449275366,0.3475416924827224,14.598540145985407,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix512,measured,61443,72.08640634572221,-62.73584905660377,72.08640634572221,-66.58291457286431,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix512,measured,61444,32.66583523867903,-17.320261437908492,32.66583523867901,-52.46913580246913,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix64,measured,61441,36.86572213787285,-71.6867469879518,36.86572213787282,-65.42553191489363,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix64,measured,61442,20.340298846057948,-36.65338645418327,20.340298846057948,-11.764705882352944,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix64,measured,61443,0.7811995215907919,-55.0314465408805,0.7811995215907919,-2.7906976744185963,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix64,measured,61444,0.9575929857554843,2.2857142857142687,0.9575929857554843,-8.968609865470857,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix8,measured,61441,0.3346938334210403,-82.08154506437768,0.3346938334210403,1.593625498007989,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix8,measured,61442,15.234588125040037,-10.426540284360186,15.234588125040037,-6.896551724137934,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",mix8,measured,61443,0.009530192266393733,-77.59740259740259,0.009530192266393733,15.789473684210531,split
+two-open-direct,one-open-rc1,"cross-session, same seed",mix8,measured,61444,-13.49457879335917,35.07853403141359,-13.49457879335917,0.0,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,cold,61441,1.7241381629530705,-3.8709677419354938,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,cold,61442,-1.1890605857735381,-2.877697841726612,,,split
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,cold,61443,-17.1726755492831,11.428571428571432,,,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,cold,61444,15.05958864835868,15.384615384615397,,,split
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,repeat,61441,-11.494252739041698,2.8368794326240954,,,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,repeat,61442,2.738095496437465,-11.31386861313869,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,repeat,61443,-6.710775278018533,11.428571428571432,,,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",read4,repeat,61444,56.01415135197843,-3.1088082901554404,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,cold,61441,0.8863819683855523,10.909090909090914,,,split
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,cold,61442,0.5076142062945932,0.0,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,cold,61443,4.4622425710282965,-0.7843137254901933,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,cold,61444,11.320754715011304,-2.209944751381221,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,repeat,61441,44.622425645453426,-34.491978609625676,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,repeat,61442,105.26849042543813,-66.73640167364016,,,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,repeat,61443,-21.491228076755963,15.294117647058814,,,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",read512,repeat,61444,-50.093341625475205,97.20279720279721,,,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61441,,,6.282500677902192,-5.746086083753765,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61442,,,-9.688283769779515,0.4391974983310565,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61443,,,-2.2651788245447113,0.6331232219557004,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_batch,measured,61444,,,-8.626020971547332,15.78748362248621,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61441,,,16.5521425807164,-17.91038076816087,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61442,,,23.068859737063875,-10.583902339415319,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61443,,,5.538714891479812,-3.126968741791636,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",txn4_sync,measured,61444,,,-5.327635893406213,1.1433110673942037,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",write1m,measured,61441,,,114.51623960035823,-77.81124497991968,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",write1m,measured,61442,,,95.22795238955608,-38.277511961722496,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",write1m,measured,61443,,,17.346469424902367,-5.106382978723401,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",write1m,measured,61444,,,31.703059235845863,-44.9685534591195,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",write4,measured,61441,,,-5.531488050174904,-20.994475138121548,split
+two-open-direct,one-open-rc1,"cross-session, same seed",write4,measured,61442,,,-0.16025270491162313,21.476510067114106,behind
+two-open-direct,one-open-rc1,"cross-session, same seed",write4,measured,61443,,,11.433989297266889,-6.5359477124183,ahead
+two-open-direct,one-open-rc1,"cross-session, same seed",write4,measured,61444,,,-0.03846999155031616,-2.547770700636931,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix4,measured,61441,5.4597155197881,-3.6809815950920255,5.4597155197881,-4.137931034482767,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix4,measured,61442,19.102437380118452,-16.149068322981375,19.102437380118452,-20.344827586206893,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix4,measured,61443,0.39118018218420314,12.080536912751683,0.39118018218418094,12.030075187969903,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix4,measured,61444,-0.36362018651436845,3.7267080745341463,-0.36362018651436845,6.896551724137923,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix512,measured,61441,-16.52534808512559,-31.794871794871792,-16.52534808512558,-14.814814814814813,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix512,measured,61442,31.5433368302958,-23.426573426573427,31.54333683029582,-67.42738589211619,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix512,measured,61443,-17.710428725317527,19.095477386934668,-17.710428725317527,52.0,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix512,measured,61444,7.045754381092051,13.452914798206294,7.045754381092051,57.14285714285714,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix64,measured,61441,18.472680314472246,-68.94273127753303,18.47268031447222,-62.2093023255814,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix64,measured,61442,10.601081195236862,-2.4539877300613577,10.601081195236862,-10.138248847926267,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix64,measured,61443,20.338103228969338,-61.76470588235294,20.338103228969338,-3.686635944700456,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix64,measured,61444,0.889632044038069,18.54304635761588,0.889632044038069,8.556149732620334,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix8,measured,61441,-4.5193144509820815,-20.095693779904312,-4.519314450982071,-15.56291390728477,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix8,measured,61442,14.343994358699398,-12.903225806451601,14.343994358699398,-10.596026490066235,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix8,measured,61443,-8.468772495844501,2.985074626865658,-8.46877249584448,7.5187969924811915,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",mix8,measured,61444,-9.009506928396904,29.648241206030136,-9.009506928396904,3.007518796992481,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,cold,61441,-11.206896593402426,-27.31707317073171,,,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,cold,61442,4.994054796919678,9.31174089068827,,,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,cold,61443,-24.76280844079779,18.181818181818187,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,cold,61444,13.109425871019308,8.938547486033531,,,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,repeat,61441,-10.536398419440939,1.3986013986013957,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,repeat,61442,45.11904821425987,-38.94472361809046,,,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,repeat,61443,-0.8506618022629975,0.0,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read4,repeat,61444,58.72641504230505,-12.20657276995305,,,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,cold,61441,-29.734085416476674,31.654676258992808,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,cold,61442,-3.8578680132757337,3.9215686274509665,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,cold,61443,8.466819226109678,-6.296296296296289,,,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,cold,61444,-1.489572997402322,-13.658536585365855,,,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,repeat,61441,31.80778032134817,-20.967741935483875,,,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,repeat,61442,-3.546099285749682,2.580645161290307,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,repeat,61443,-12.105263159368185,0.0,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",read512,repeat,61444,-44.928438076909906,64.91228070175438,,,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61441,,,6.430265807785918,-9.888707065687674,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61442,,,-1.5335473169075686,5.227122137966589,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61443,,,-19.23226101753588,16.271550566625503,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_batch,measured,61444,,,0.8659162096460227,3.2849892931939184,split
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61441,,,10.429895204135553,-6.602108085479341,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61442,,,8.036431477593897,-6.978257383195596,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61443,,,0.5941340216602198,-0.2253610981956644,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",txn4_sync,measured,61444,,,5.747532188060833,-6.246797582166897,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write1m,measured,61441,,,8.95557504746154,-32.20858895705522,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write1m,measured,61442,,,42.22712170601503,-18.867924528301884,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write1m,measured,61443,,,-8.233709529154332,58.156028368794324,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write1m,measured,61444,,,149.05569619458,-84.03284671532847,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write4,measured,61441,,,0.46804033239069565,0.0,ahead
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write4,measured,61442,,,-10.175200958953123,24.827586206896555,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write4,measured,61443,,,-11.802932815022327,0.0,behind
+two-open-direct,pr-direct-sg1,"cross-session, same seed",write4,measured,61444,,,-10.300744880828393,10.07194244604317,behind
+two-open-direct,stock,same-session,mix4,measured,61441,19.775295629439317,8.275862068965512,19.775295629439317,13.469387755102048,split
+two-open-direct,stock,same-session,mix4,measured,61442,49.71341951441295,-6.896551724137934,49.713419514412905,-5.714285714285705,ahead
+two-open-direct,stock,same-session,mix4,measured,61443,43.39872606516244,16.78321678321677,43.39872606516244,26.80851063829788,split
+two-open-direct,stock,same-session,mix4,measured,61444,47.30775579809156,-8.743169398907114,47.30775579809159,-3.7267080745341685,ahead
+two-open-direct,stock,same-session,mix512,measured,61441,132.1941329399869,73.8562091503268,132.1941329399869,288.7323943661971,split
+two-open-direct,stock,same-session,mix512,measured,61442,257.8879607969228,34.355828220858896,257.8879607969228,39.55555555555554,split
+two-open-direct,stock,same-session,mix512,measured,61443,181.2430835133565,49.05660377358492,181.2430835133565,130.3030303030303,split
+two-open-direct,stock,same-session,mix512,measured,61444,250.4181791124576,61.14649681528665,250.4181791124576,107.1748878923767,split
+two-open-direct,stock,same-session,mix64,measured,61441,210.01376748366042,-20.338983050847446,210.01376748366036,-21.052631578947366,ahead
+two-open-direct,stock,same-session,mix64,measured,61442,208.8002656155251,-19.289340101522846,208.8002656155251,-30.85106382978724,ahead
+two-open-direct,stock,same-session,mix64,measured,61443,206.041187312923,-22.702702702702695,206.04118731292306,-25.886524822695034,ahead
+two-open-direct,stock,same-session,mix64,measured,61444,218.35903140558761,-8.20512820512821,218.35903140558761,-24.814814814814813,ahead
+two-open-direct,stock,same-session,mix8,measured,61441,30.11891410511065,-13.471502590673579,30.11891410511065,-16.666666666666664,ahead
+two-open-direct,stock,same-session,mix8,measured,61442,50.854056106058735,-9.569377990430617,50.854056106058735,-8.163265306122447,ahead
+two-open-direct,stock,same-session,mix8,measured,61443,21.463964944845703,2.985074626865658,21.463964944845703,10.852713178294593,split
+two-open-direct,stock,same-session,mix8,measured,61444,26.29789797443245,4.453441295546567,26.29789797443245,7.4509803921568585,split
+two-open-direct,stock,same-session,read4,cold,61441,-19.348658875238968,21.63265306122448,,,behind
+two-open-direct,stock,same-session,read4,cold,61442,18.0737216212542,-16.149068322981375,,,ahead
+two-open-direct,stock,same-session,read4,cold,61443,-19.82922205469082,16.766467065868262,,,behind
+two-open-direct,stock,same-session,read4,cold,61444,-14.409534045262006,6.557377049180335,,,behind
+two-open-direct,stock,same-session,read4,repeat,61441,-13.409961752918942,22.362869198312254,,,behind
+two-open-direct,stock,same-session,read4,repeat,61442,3.4523810757058015,-2.409638554216864,,,ahead
+two-open-direct,stock,same-session,read4,repeat,61443,-31.285444236708372,92.11822660098521,,,behind
+two-open-direct,stock,same-session,read4,repeat,61444,-18.749999935831873,44.961240310077535,,,behind
+two-open-direct,stock,same-session,read512,cold,61441,21.192586638956158,-24.691358024691358,,,ahead
+two-open-direct,stock,same-session,read512,cold,61442,52.89340100365898,-33.47280334728035,,,ahead
+two-open-direct,stock,same-session,read512,cold,61443,70.25171627885145,-44.75982532751092,,,ahead
+two-open-direct,stock,same-session,read512,cold,61444,47.567030810723686,-28.915662650602403,,,ahead
+two-open-direct,stock,same-session,read512,repeat,61441,-9.839816927172896,7.929515418502198,,,behind
+two-open-direct,stock,same-session,read512,repeat,61442,-16.312056749591484,36.480686695278955,,,behind
+two-open-direct,stock,same-session,read512,repeat,61443,-27.105263164259284,30.666666666666664,,,behind
+two-open-direct,stock,same-session,read512,repeat,61444,-50.52893590789027,148.4581497797357,,,behind
+two-open-direct,stock,same-session,txn4_batch,measured,61441,,,17.86278659839504,3.806750888274779,split
+two-open-direct,stock,same-session,txn4_batch,measured,61442,,,3.735970162281199,21.77728550736986,split
+two-open-direct,stock,same-session,txn4_batch,measured,61443,,,5.323955195757724,9.307656575040891,split
+two-open-direct,stock,same-session,txn4_batch,measured,61444,,,-3.7931580446060043,40.072974065485155,behind
+two-open-direct,stock,same-session,txn4_sync,measured,61441,,,5.73338988675498,-3.8189680225765965,ahead
+two-open-direct,stock,same-session,txn4_sync,measured,61442,,,3.1974551470808077,-1.159209067588196,ahead
+two-open-direct,stock,same-session,txn4_sync,measured,61443,,,7.764441009373457,-2.734788286301537,ahead
+two-open-direct,stock,same-session,txn4_sync,measured,61444,,,2.51946572474373,-0.619918217326143,ahead
+two-open-direct,stock,same-session,write1m,measured,61441,,,421.4373296092739,-87.15116279069768,ahead
+two-open-direct,stock,same-session,write1m,measured,61442,,,460.2289995006984,321.2244897959184,split
+two-open-direct,stock,same-session,write1m,measured,61443,,,583.7971233581021,245.73643410852716,split
+two-open-direct,stock,same-session,write1m,measured,61444,,,644.4914956361139,-77.09424083769633,ahead
+two-open-direct,stock,same-session,write4,measured,61441,,,75.48596838404409,-10.062893081760993,ahead
+two-open-direct,stock,same-session,write4,measured,61442,,,75.59807444406755,-2.162162162162151,ahead
+two-open-direct,stock,same-session,write4,measured,61443,,,79.75879779535202,-6.5359477124183,ahead
+two-open-direct,stock,same-session,write4,measured,61444,,,67.25264021238408,-7.2727272727272645,ahead
+two-open-direct,two-open-mixed,same-session,mix4,measured,61441,-5.302819591260121,-3.6809815950920255,-5.302819591260121,-5.442176870748305,split
+two-open-direct,two-open-mixed,same-session,mix4,measured,61442,-9.27295201218088,-8.163265306122447,-9.272952012180902,-11.832061068702293,split
+two-open-direct,two-open-mixed,same-session,mix4,measured,61443,-12.155807852352552,23.703703703703695,-12.155807852352552,30.13100436681222,behind
+two-open-direct,two-open-mixed,same-session,mix4,measured,61444,-19.409107939474723,23.703703703703695,-19.409107939474733,33.047210300429185,behind
+two-open-direct,two-open-mixed,same-session,mix512,measured,61441,-22.97870459871525,-2.9197080291970767,-22.97870459871524,25.45454545454544,split
+two-open-direct,two-open-mixed,same-session,mix512,measured,61442,31.960894670218345,-23.426573426573427,31.960894670218345,-45.10489510489511,ahead
+two-open-direct,two-open-mixed,same-session,mix512,measured,61443,-17.21791367108286,-4.819277108433728,-17.217913671082876,9.4650205761317,split
+two-open-direct,two-open-mixed,same-session,mix512,measured,61444,2.044292107329171,22.222222222222232,2.044292107329171,19.68911917098446,split
+two-open-direct,two-open-mixed,same-session,mix64,measured,61441,-0.251340801843003,-16.56804733727809,-0.2513408018430141,-10.958904109589051,split
+two-open-direct,two-open-mixed,same-session,mix64,measured,61442,19.795523309876152,-5.917159763313606,19.795523309876152,-9.302325581395344,ahead
+two-open-direct,two-open-mixed,same-session,mix64,measured,61443,1.653235382724616,-2.7210884353741416,1.6532353827246382,3.9800995024875663,split
+two-open-direct,two-open-mixed,same-session,mix64,measured,61444,1.7459634992671669,-3.2432432432432434,1.7459634992671669,-12.875536480686689,ahead
+two-open-direct,two-open-mixed,same-session,mix8,measured,61441,-3.8854441853971244,-11.64021164021165,-3.8854441853971244,-14.429530201342267,split
+two-open-direct,two-open-mixed,same-session,mix8,measured,61442,1.1406260476004348,-3.076923076923066,1.1406260476004348,3.0534351145037997,split
+two-open-direct,two-open-mixed,same-session,mix8,measured,61443,-8.385282982396248,2.985074626865658,-8.385282982396248,4.379562043795637,behind
+two-open-direct,two-open-mixed,same-session,mix8,measured,61444,-8.29727098207872,2.7888446215139417,-8.297270982078707,-5.517241379310345,split
+two-open-direct,two-open-mixed,same-session,read4,cold,61441,-18.67816090772528,17.78656126482212,,,behind
+two-open-direct,two-open-mixed,same-session,read4,cold,61442,-2.0214031576224367,11.111111111111116,,,behind
+two-open-direct,two-open-mixed,same-session,read4,cold,61443,-34.06072124439439,25.806451612903224,,,behind
+two-open-direct,two-open-mixed,same-session,read4,cold,61444,-9.642470196088858,5.405405405405395,,,behind
+two-open-direct,two-open-mixed,same-session,read4,repeat,61441,-18.67816090772528,15.537848605577697,,,behind
+two-open-direct,two-open-mixed,same-session,read4,repeat,61442,-0.5952381026443243,-5.813953488372093,,,split
+two-open-direct,two-open-mixed,same-session,read4,repeat,61443,-15.595463139882803,63.179916317991626,,,behind
+two-open-direct,two-open-mixed,same-session,read4,repeat,61444,6.132075653569591,52.65306122448978,,,split
+two-open-direct,two-open-mixed,same-session,read512,cold,61441,19.74214346224008,-19.383259911894267,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,cold,61442,52.487309660114164,-36.14457831325301,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,cold,61443,69.79405033534279,-43.77777777777777,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,cold,61444,49.05660376237522,-32.44274809160306,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,repeat,61441,171.05263162104131,-63.32335329341318,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,repeat,61442,-19.14893617732847,41.333333333333336,,,behind
+two-open-direct,two-open-mixed,same-session,read512,repeat,61443,109.8245614255906,-53.77358490566038,,,ahead
+two-open-direct,two-open-mixed,same-session,read512,repeat,61444,-47.97759800281314,140.00000000000003,,,behind
+two-open-direct,two-open-mixed,same-session,txn4_batch,measured,61441,,,-2.7181463519051485,-2.6967768197461273,split
+two-open-direct,two-open-mixed,same-session,txn4_batch,measured,61442,,,-3.134845124266994,-0.6965070432320641,split
+two-open-direct,two-open-mixed,same-session,txn4_batch,measured,61443,,,-4.278222772738271,1.0002705955902247,behind
+two-open-direct,two-open-mixed,same-session,txn4_batch,measured,61444,,,-3.138790211991027,14.475857632187484,behind
+two-open-direct,two-open-mixed,same-session,txn4_sync,measured,61441,,,19.701860929559544,-15.891987309382582,ahead
+two-open-direct,two-open-mixed,same-session,txn4_sync,measured,61442,,,4.070689403522243,-1.3609427531981577,ahead
+two-open-direct,two-open-mixed,same-session,txn4_sync,measured,61443,,,2.247356972961856,-0.8869541962044369,ahead
+two-open-direct,two-open-mixed,same-session,txn4_sync,measured,61444,,,-3.2136617852295934,0.7311567278348807,behind
+two-open-direct,two-open-mixed,same-session,write1m,measured,61441,,,26.74912622233141,-35.38011695906433,ahead
+two-open-direct,two-open-mixed,same-session,write1m,measured,61442,,,-19.98422558679882,62.26415094339623,behind
+two-open-direct,two-open-mixed,same-session,write1m,measured,61443,,,-6.729900222265783,27.428571428571423,behind
+two-open-direct,two-open-mixed,same-session,write1m,measured,61444,,,87.46501013561776,-91.77631578947368,ahead
+two-open-direct,two-open-mixed,same-session,write4,measured,61441,,,-10.69204529378911,9.160305343511443,behind
+two-open-direct,two-open-mixed,same-session,write4,measured,61442,,,-5.213422666657552,15.286624203821674,behind
+two-open-direct,two-open-mixed,same-session,write4,measured,61443,,,-11.207602439163377,9.160305343511443,behind
+two-open-direct,two-open-mixed,same-session,write4,measured,61444,,,-25.224145226628035,13.33333333333333,behind

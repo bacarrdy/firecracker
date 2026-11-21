@@ -1,0 +1,154 @@
+From 64fb4b9eadeabc7cca815baa22edf446e9dd7e43 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:49:01 +0200
+Subject: [PATCH] qa: select raw direct io-wq worker CPUs before first
+ submission
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../virtio/block/virtio/io/async_io.rs        | 26 +++++++++--
+ src/vmm/src/io_uring/mod.rs                   | 43 ++++++++++++++++++-
+ 2 files changed, 65 insertions(+), 4 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index 6de99f4ef..3137d14b4 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -248,6 +248,7 @@ impl AsyncFileEngine {
+     fn new_ring(
+         file: &File,
+         completion_fd: RawFd,
++        direct: bool,
+         discard_op: Option<AsyncDiscardOp>,
+     ) -> Result<IoUring<WrappedRequest>, IoUringError> {
+         let mut restrictions = vec![
+@@ -280,12 +281,26 @@ impl AsyncFileEngine {
+             None => {}
+         }
+ 
++        let configured = std::env::var("FC_QA_IOWQ_CPUS").ok();
++        let qa_mask = if direct
++            && configured.is_some()
++            && file
++                .metadata()
++                .map_err(IoUringError::WorkerAffinity)?
++                .file_type()
++                .is_block_device()
++        {
++            configured.as_deref()
++        } else {
++            None
++        };
+         IoUring::new_with_required_ops(
+             u32::from(IO_URING_NUM_ENTRIES),
+             vec![file],
+             restrictions,
+             Some(completion_fd),
+             &required_ops,
++            qa_mask,
+         )
+     }
+ 
+@@ -298,7 +313,7 @@ impl AsyncFileEngine {
+ 
+         let completion_evt = EventFd::new(libc::EFD_NONBLOCK).map_err(AsyncIoError::EventFd)?;
+         let discard_op = Self::discard_op(&file, discard)?;
+-        let ring = Self::new_ring(&file, completion_evt.as_raw_fd(), discard_op)
++        let ring = Self::new_ring(&file, completion_evt.as_raw_fd(), dio.is_some(), discard_op)
+             .map_err(AsyncIoError::IoUring)?;
+ 
+         Ok(AsyncFileEngine {
+@@ -324,8 +339,13 @@ impl AsyncFileEngine {
+             )));
+         }
+         let discard_op = Self::discard_op(&file, self.discard_op.is_some())?;
+-        let ring = Self::new_ring(&file, self.completion_evt.as_raw_fd(), discard_op)
+-            .map_err(AsyncIoError::IoUring)?;
++        let ring = Self::new_ring(
++            &file,
++            self.completion_evt.as_raw_fd(),
++            dio.is_some(),
++            discard_op,
++        )
++        .map_err(AsyncIoError::IoUring)?;
+ 
+         self.ring = ring;
+         self.file = file;
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 99d5980e6..010542d77 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -49,6 +49,8 @@ pub enum IoUringError {
+     Probe(IOError),
+     /// Could not register eventfd: {0}
+     RegisterEventfd(IOError),
++    /// Could not configure QA io-wq worker CPU placement: {0}
++    WorkerAffinity(IOError),
+     /// Could not register file: {0}
+     RegisterFile(IOError),
+     /// Attempted to register too many files.
+@@ -115,7 +117,14 @@ impl<T: Debug> IoUring<T> {
+         restrictions: Vec<Restriction>,
+         eventfd: Option<RawFd>,
+     ) -> Result<Self, IoUringError> {
+-        Self::new_with_required_ops(num_entries, files, restrictions, eventfd, &REQUIRED_OPS)
++        Self::new_with_required_ops(
++            num_entries,
++            files,
++            restrictions,
++            eventfd,
++            &REQUIRED_OPS,
++            None,
++        )
+     }
+ 
+     /// Create a new instance, checking an explicit set of required operations.
+@@ -125,6 +134,7 @@ impl<T: Debug> IoUring<T> {
+         restrictions: Vec<Restriction>,
+         eventfd: Option<RawFd>,
+         required_ops: &[OpCode],
++        qa_mask: Option<&str>,
+     ) -> Result<Self, IoUringError> {
+         let mut params = io_uring_params {
+             // Create the ring as disabled, so that we may register restrictions.
+@@ -179,6 +189,37 @@ impl<T: Debug> IoUring<T> {
+ 
+         instance.register_files(files)?;
+ 
++        if let Some(cpus) = qa_mask {
++            if cpus != "off" {
++                let mut mask = [0u64; 16];
++                for item in cpus.split(',') {
++                    let cpu = item
++                        .parse::<usize>()
++                        .ok()
++                        .filter(|&cpu| cpu < mask.len() * 64)
++                        .ok_or_else(|| {
++                            IoUringError::WorkerAffinity(IOError::new(
++                                std::io::ErrorKind::InvalidInput,
++                                "invalid QA CPU list",
++                            ))
++                        })?;
++                    mask[cpu / 64] |= 1u64 << (cpu % 64);
++                }
++                // SAFETY: mask points to the initialized bitmap for the full syscall.
++                SyscallReturnCode(unsafe {
++                    libc::syscall(
++                        libc::SYS_io_uring_register,
++                        fd,
++                        io_uring_register_op::IORING_REGISTER_IOWQ_AFF,
++                        mask.as_ptr(),
++                        std::mem::size_of_val(&mask),
++                    )
++                })
++                .into_empty_result()
++                .map_err(IoUringError::WorkerAffinity)?;
++            }
++            eprintln!("QA io-wq before enable cpus={cpus} ring={fd}");
++        }
+         instance.enable()?;
+ 
+         Ok(instance)
+-- 
+2.43.0
+

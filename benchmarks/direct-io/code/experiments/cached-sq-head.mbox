@@ -1,0 +1,163 @@
+From 5a09a7ba93d92f0f85a72b6473fc5f318933d455 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 16:48:55 +0200
+Subject: [PATCH] io_uring: cache the acquired submission queue head
+
+Use the last acquired kernel head to admit SQEs while the ring has known free slots. Reload the head when that space is exhausted. Keep pending_sqes exact and retain the existing release store for every SQE.
+
+Exercise short and full batches across slot reuse and check the completion identities and file contents.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/src/io_uring/mod.rs              |  2 +-
+ src/vmm/src/io_uring/queue/submission.rs | 42 +++++++++++++++---------
+ src/vmm/tests/io_uring.rs                | 39 ++++++++++++++++++++++
+ 3 files changed, 67 insertions(+), 16 deletions(-)
+
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 62b32986c..99d5980e6 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -289,7 +289,7 @@ impl<T: Debug> IoUring<T> {
+     /// Whether another operation can be queued without mutating the ring.
+     pub fn can_push(&self) -> Result<bool, IoUringError> {
+         Ok(self.num_ops < self.cqueue.count()
+-            && self.squeue.pending().map_err(IoUringError::SQueue)? < self.squeue.count())
++            && self.squeue.has_space().map_err(IoUringError::SQueue)?)
+     }
+ 
+     /// A total of the number of ops in the submission and completion queues, as well as the
+diff --git a/src/vmm/src/io_uring/queue/submission.rs b/src/vmm/src/io_uring/queue/submission.rs
+index 06ea26abf..39d368029 100644
+--- a/src/vmm/src/io_uring/queue/submission.rs
++++ b/src/vmm/src/io_uring/queue/submission.rs
+@@ -41,6 +41,7 @@ pub(crate) struct SubmissionQueue {
+     ring_mask: u32,
+     count: u32,
+     unmasked_tail: Wrapping<u32>,
++    cached_head: Wrapping<u32>,
+ 
+     // Mmap-ed ring.
+     ring: MmapRegion,
+@@ -76,6 +77,7 @@ impl SubmissionQueue {
+             count: params.sq_entries,
+             // We can init this to 0 and cache it because we are the only ones modifying it.
+             unmasked_tail: Wrapping(0),
++            cached_head: Wrapping(0),
+             ring,
+             sqes,
+             to_submit: 0,
+@@ -88,14 +90,16 @@ impl SubmissionQueue {
+         // get the sqe tail
+         let tail = self.unmasked_tail.0 & self.ring_mask;
+ 
+-        // get the pending sqes
+-        let pending = match self.pending() {
+-            Ok(n) => n,
+-            Err(err) => return Err((err, sqe.user_data())),
+-        };
+-
+-        if pending >= self.count {
+-            return Err((SQueueError::FullQueue, sqe.user_data()));
++        // Only the kernel advances the head. An acquired head covers every slot it
++        // has already released. Refresh it when we have used all of those slots.
++        if self.full_at(self.cached_head) {
++            self.cached_head = match self.load_head() {
++                Ok(head) => head,
++                Err(err) => return Err((err, sqe.user_data())),
++            };
++            if self.full_at(self.cached_head) {
++                return Err((SQueueError::FullQueue, sqe.user_data()));
++            }
+         }
+ 
+         // retrieve and populate the sqe
+@@ -180,20 +184,28 @@ impl SubmissionQueue {
+         Ok((sqe_ring, sqes))
+     }
+ 
+-    pub(crate) fn count(&self) -> u32 {
+-        self.count
++    fn full_at(&self, head: Wrapping<u32>) -> bool {
++        (self.unmasked_tail - head).0 >= self.count
++    }
++
++    pub(crate) fn has_space(&self) -> Result<bool, SQueueError> {
++        Ok(!self.full_at(self.cached_head) || !self.full_at(self.load_head()?))
+     }
+ 
+     pub(crate) fn unsubmitted(&self) -> u32 {
+         self.to_submit
+     }
+ 
+-    pub(crate) fn pending(&self) -> Result<u32, SQueueError> {
+-        let ring_slice = self.ring.as_volatile_slice();
+-        // get the sqe head
+-        let unmasked_head = ring_slice.load::<u32>(self.head_off, Ordering::Acquire)?;
++    fn load_head(&self) -> Result<Wrapping<u32>, SQueueError> {
++        Ok(Wrapping(
++            self.ring
++                .as_volatile_slice()
++                .load(self.head_off, Ordering::Acquire)?,
++        ))
++    }
+ 
+-        Ok((self.unmasked_tail - Wrapping(unmasked_head)).0)
++    pub(crate) fn pending(&self) -> Result<u32, SQueueError> {
++        Ok((self.unmasked_tail - self.load_head()?).0)
+     }
+ }
+ 
+diff --git a/src/vmm/tests/io_uring.rs b/src/vmm/tests/io_uring.rs
+index 7f7a6708c..0c1ff2012 100644
+--- a/src/vmm/tests/io_uring.rs
++++ b/src/vmm/tests/io_uring.rs
+@@ -263,6 +263,45 @@ fn test_ring_push() {
+     }
+ }
+ 
++#[test]
++fn test_sq_capacity_across_partial_batches() {
++    let file = TempFile::new().unwrap().into_file();
++    let mut ring = IoUring::new(4, vec![&file], vec![], None).unwrap();
++    let data = *b"abcdefghijklmnop";
++    let mut offset = 0;
++
++    // Mix full and short batches so that SQ slots wrap at different offsets.
++    for batch in [4, 1, 3, 2, 4, 2] {
++        for (idx, byte) in data.iter().enumerate().skip(offset).take(batch) {
++            assert!(ring.can_push().unwrap());
++            ring.push(Operation::write(
++                0,
++                std::ptr::from_ref(byte) as usize,
++                1,
++                idx as u64,
++                idx,
++            ))
++            .unwrap();
++        }
++        assert_eq!(ring.pending_sqes().unwrap() as usize, batch);
++        assert_eq!(ring.can_push().unwrap(), batch < 4);
++        assert_eq!(ring.submit_and_wait_all().unwrap() as usize, batch);
++        assert!(ring.can_push().unwrap());
++        let mut done = Vec::new();
++        while let Some(cqe) = ring.pop().unwrap() {
++            assert_eq!(cqe.result().unwrap(), 1);
++            done.push(cqe.user_data());
++        }
++        done.sort_unstable();
++        assert_eq!(done, (offset..offset + batch).collect::<Vec<_>>());
++        offset += batch;
++    }
++
++    let mut readback = [0; 16];
++    file.read_exact_at(&mut readback, 0).unwrap();
++    assert_eq!(data, readback);
++}
++
+ #[test]
+ fn test_ring_submit() {
+     {
+-- 
+2.43.0
+

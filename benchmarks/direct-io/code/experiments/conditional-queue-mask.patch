@@ -1,0 +1,121 @@
+From a69f68d699a0a4b5809c309525a33ebc51de51a2 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 16:46:31 +0200
+Subject: [PATCH] virtio: mask split-ring indexes for power-of-two queues
+
+Split-ring sizes are validated during initialization. Avoid division when wrapping the available and used ring positions for these queues. Preserve the remainder for a different size assigned directly to a Queue.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/src/devices/virtio/queue.rs | 65 +++++++++++++++++++++++++++--
+ 1 file changed, 61 insertions(+), 4 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 3621735d5..004b0c614 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -529,6 +529,17 @@ impl Queue {
+         Ok(self.pop_unchecked().map(|head| (head, len - 1)))
+     }
+ 
++    fn ring_slot(&self, index: Wrapping<u16>) -> usize {
++        let size = self.size;
++        // Queue initialization enforces a power of two. Queue sizes can also be
++        // assigned directly, so retain remainder semantics for other sizes.
++        usize::from(if size.is_power_of_two() {
++            index.0 & (size - 1)
++        } else {
++            index.0 % size
++        })
++    }
++
+     /// Pop the first available descriptor chain from the avail ring.
+     ///
+     /// # Important
+@@ -545,10 +556,10 @@ impl Queue {
+         // We use `self.next_avail` to store the position, in `ring`, of the next available
+         // descriptor index, with a twist: we always only increment `self.next_avail`, so the
+         // actual position will be `self.next_avail % self.size`.
+-        let idx = self.next_avail.0 % self.size;
++        let idx = self.ring_slot(self.next_avail);
+         // SAFETY:
+         // index is bound by the queue size
+-        let desc_index = unsafe { self.avail_ring_ring_get(usize::from(idx)) };
++        let desc_index = unsafe { self.avail_ring_ring_get(idx) };
+ 
+         DescriptorChain::checked_new(self.desc_table_ptr, self.size, desc_index).inspect(|_| {
+             self.next_avail += Wrapping(1);
+@@ -578,7 +589,7 @@ impl Queue {
+             return Err(QueueError::DescIndexOutOfBounds(desc_index));
+         }
+ 
+-        let next_used = (self.next_used + Wrapping(ring_index_offset)).0 % self.size;
++        let next_used = self.ring_slot(self.next_used + Wrapping(ring_index_offset));
+         let used_element = UsedElement {
+             id: u32::from(desc_index),
+             len,
+@@ -586,7 +597,7 @@ impl Queue {
+         // SAFETY:
+         // index is bound by the queue size
+         unsafe {
+-            self.used_ring_ring_set(usize::from(next_used), used_element);
++            self.used_ring_ring_set(next_used, used_element);
+         }
+         Ok(())
+     }
+@@ -1687,6 +1698,52 @@ mod tests {
+         assert_eq!(q.used_ring_avail_event_get(), 1);
+     }
+ 
++    #[test]
++    fn test_split_ring_slots_wrap() {
++        let mem = single_region_mem(0x100000);
++        for power in 0..=15 {
++            let size = 1u16 << power;
++            let vq = VirtQueue::new(GuestAddress(0), &mem, size);
++            let mut q = vq.create_queue();
++
++            q.next_avail = Wrapping(u16::MAX);
++            vq.avail.ring[usize::from(size - 1)].set(size - 1);
++            vq.avail.idx.set(0);
++            assert_eq!(q.pop().unwrap().unwrap().index, size - 1);
++            assert_eq!(q.next_avail, Wrapping(0));
++
++            vq.avail.ring[0].set(0);
++            vq.avail.idx.set(1);
++            assert_eq!(q.pop().unwrap().unwrap().index, 0);
++            assert_eq!(q.next_avail, Wrapping(1));
++
++            q.next_used = Wrapping(u16::MAX);
++            q.write_used_element(1, 0, 11).unwrap();
++            vq.check_used_elem(0, 0, 11);
++            q.add_used(size - 1, 22).unwrap();
++            q.advance_used_ring_idx();
++            vq.check_used_elem(size - 1, size - 1, 22);
++            assert_eq!(vq.used.idx.get(), 0);
++
++            q.add_used(0, 33).unwrap();
++            q.advance_used_ring_idx();
++            vq.check_used_elem(0, 0, 33);
++            assert_eq!(vq.used.idx.get(), 1);
++        }
++    }
++
++    #[test]
++    fn test_ring_slot_with_unvalidated_size() {
++        let q = Queue::new(3);
++        assert_eq!(q.ring_slot(Wrapping(5)), 2);
++
++        let mut q = Queue::new(0);
++        assert!(matches!(
++            q.write_used_element(0, 0, 0),
++            Err(DescIndexOutOfBounds(0))
++        ));
++    }
++
+     #[test]
+     fn test_initialize_with_aligned_pointer() {
+         let mut q = Queue::new(FIRECRACKER_MAX_QUEUE_SIZE);
+-- 
+2.43.0
+

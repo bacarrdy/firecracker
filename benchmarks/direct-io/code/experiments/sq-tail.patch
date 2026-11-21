@@ -1,0 +1,135 @@
+From 433f97624b982303e51f05461391ad604e31e84d Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 16:39:48 +0200
+Subject: [PATCH] io_uring: publish the submission tail once per enter
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/src/io_uring/mod.rs              |  2 +-
+ src/vmm/src/io_uring/queue/submission.rs | 78 +++++++++++++++++++++---
+ 2 files changed, 70 insertions(+), 10 deletions(-)
+
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 62b32986c..6f57cccd4 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -281,7 +281,7 @@ impl<T: Debug> IoUring<T> {
+         self.squeue.pending().map_err(IoUringError::SQueue)
+     }
+ 
+-    /// Operations published to the SQ but not yet accepted by io_uring_enter.
++    /// Operations staged for submission but not yet accepted by io_uring_enter.
+     pub fn unsubmitted_sqes(&self) -> u32 {
+         self.squeue.unsubmitted()
+     }
+diff --git a/src/vmm/src/io_uring/queue/submission.rs b/src/vmm/src/io_uring/queue/submission.rs
+index 06ea26abf..f9b377aaa 100644
+--- a/src/vmm/src/io_uring/queue/submission.rs
++++ b/src/vmm/src/io_uring/queue/submission.rs
+@@ -83,8 +83,6 @@ impl SubmissionQueue {
+     }
+ 
+     pub(crate) fn push(&mut self, sqe: Sqe) -> Result<(), (SQueueError, u64)> {
+-        let ring_slice = self.ring.as_volatile_slice();
+-
+         // get the sqe tail
+         let tail = self.unmasked_tail.0 & self.ring_mask;
+ 
+@@ -106,14 +104,7 @@ impl SubmissionQueue {
+             return Err((SQueueError::VolatileMemory(err), sqe.user_data()));
+         }
+ 
+-        // increment the sqe tail
+         self.unmasked_tail += Wrapping(1u32);
+-
+-        if let Err(err) = ring_slice.store(self.unmasked_tail.0, self.tail_off, Ordering::Release) {
+-            return Err((SQueueError::VolatileMemory(err), sqe.user_data()));
+-        }
+-
+-        // This is safe since we already checked if there is enough space in the queue;
+         self.to_submit += 1;
+ 
+         Ok(())
+@@ -125,6 +116,16 @@ impl SubmissionQueue {
+             return Ok(0);
+         }
+ 
++        if self.to_submit != 0 {
++            // This ring has no SQPOLL thread. Publish all staged SQEs before the
++            // enter which consumes them. A partial enter leaves the rest queued.
++            self.ring.as_volatile_slice().store(
++                self.unmasked_tail.0,
++                self.tail_off,
++                Ordering::Release,
++            )?;
++        }
++
+         let mut flags = 0;
+ 
+         if min_complete > 0 {
+@@ -205,3 +206,62 @@ impl Drop for SubmissionQueue {
+         unsafe { libc::munmap(self.sqes.as_ptr().cast::<libc::c_void>(), self.sqes.size()) };
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use std::os::unix::fs::FileExt;
++
++    use vmm_sys_util::tempfile::TempFile;
++
++    use super::*;
++    use crate::io_uring::IoUring;
++    use crate::io_uring::operation::Operation;
++
++    fn published_tail(queue: &SubmissionQueue) -> u32 {
++        queue
++            .ring
++            .as_volatile_slice()
++            .load(queue.tail_off, Ordering::Acquire)
++            .unwrap()
++    }
++
++    #[test]
++    fn test_publish_staged_entries_on_submit() {
++        let file = TempFile::new().unwrap().into_file();
++        let bytes = b"abcdefghij";
++        let mut ring = IoUring::new(4, vec![&file], vec![], None).unwrap();
++        let mut first = 0;
++        for count in [4, 2, 4] {
++            let end = first + count;
++            for (i, byte) in bytes.iter().enumerate().take(end).skip(first) {
++                let op = Operation::write(0, std::ptr::from_ref(byte) as usize, 1, i as u64, i);
++                ring.push(op).unwrap();
++            }
++            assert_eq!(published_tail(&ring.squeue) as usize, first);
++            assert_eq!(ring.unsubmitted_sqes() as usize, count);
++            assert_eq!(ring.pending_sqes().unwrap() as usize, count);
++            assert_eq!(ring.can_push().unwrap(), count < 4);
++
++            // Limit this enter to one entry. The kernel can already see the whole
++            // batch but must consume only the requested prefix.
++            ring.squeue.to_submit = 1;
++            assert_eq!(ring.submit().unwrap(), 1);
++            ring.squeue.to_submit += u32::try_from(count - 1).unwrap();
++            assert_eq!(published_tail(&ring.squeue) as usize, end);
++            assert_eq!(ring.submit_and_wait_all().unwrap() as usize, count - 1);
++            let mut completed = Vec::new();
++            while let Some(cqe) = ring.pop().unwrap() {
++                assert_eq!(cqe.result().unwrap(), 1);
++                completed.push(cqe.user_data());
++            }
++            completed.sort_unstable();
++            assert_eq!(completed, (first..end).collect::<Vec<_>>());
++            assert_eq!(ring.num_ops(), 0);
++            assert_eq!(ring.submit().unwrap(), 0);
++            first = end;
++        }
++        let mut actual = [0; 10];
++        file.read_exact_at(&mut actual, 0).unwrap();
++        assert_eq!(&actual, bytes);
++    }
++}
+-- 
+2.43.0
+

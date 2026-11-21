@@ -1,0 +1,267 @@
+From c2f29e50f2a9cf8fb0e9abce5193dd597900ea02 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 17:54:11 +0200
+Subject: [PATCH] virtio-blk: allow a second staged 4 KiB read hint
+
+Permit a second concurrent hint only for a complete 4096-byte aligned initial guest read. Count marked windows until reaped and keep other sizes at one admission. Exercise mixed sizes, real short EOF progress, retry and restricted-ring errors.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../virtio/block/virtio/io/async_io.rs        | 147 ++++++++++++++----
+ 1 file changed, 120 insertions(+), 27 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index fee238a21..e31ee0dc2 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -78,15 +78,32 @@ enum AsyncDiscardOp {
+     Fallocate,
+ }
+ 
+-/// One outstanding read hint per eligible drive. Losing optional metadata disables the hint.
++/// Number of unreaped read hints on an eligible drive. A second admission requires a 4 KiB read.
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ enum ReadDispatch {
+     Disabled,
+     Available,
+-    Outstanding,
++    One,
++    Two,
+ }
+ 
+ impl ReadDispatch {
++    fn after_admission(self, read_bytes: u64) -> Option<Self> {
++        match (self, read_bytes) {
++            (Self::Available, 1..) => Some(Self::One),
++            (Self::One, 4096) => Some(Self::Two),
++            _ => None,
++        }
++    }
++
++    fn after_completion(self) -> Self {
++        match self {
++            Self::Two => Self::One,
++            Self::One => Self::Available,
++            _ => unreachable!("only an admitted, marked SQE can return a read hint"),
++        }
++    }
++
+     fn for_backing(file: &File, dio: Option<DioAlign>) -> Self {
+         if cfg!(feature = "experimental-burst-read-dispatch")
+             && dio.is_some()
+@@ -745,7 +762,7 @@ impl AsyncFileEngine {
+             }),
+             writes: write.then(|| (offset, offset.saturating_add(u64::from(count)))),
+         };
+-        self.push_new_data(op, !write && count != 0)
++        self.push_new_data(op, if write { 0 } else { u64::from(count) })
+     }
+ 
+     fn push_transfer(
+@@ -792,26 +809,29 @@ impl AsyncFileEngine {
+             }),
+             writes: write.then(|| (offset, offset.saturating_add(len))),
+         };
+-        self.push_new_data(op, !write && len != 0)
++        self.push_new_data(op, if write { 0 } else { len })
+     }
+ 
+     fn push_new_data(
+         &mut self,
+         mut op: GuestOp,
+-        nonempty_read: bool,
++        read_bytes: u64,
+     ) -> Result<(), RequestError<AsyncIoError>> {
+         // A locally staged SQE cannot have finished: this read will share a submission burst.
+         // The token stays with this window until its CQE is consumed, even across short submits.
+-        let hint = cfg!(feature = "experimental-burst-read-dispatch")
+-            && self.read_dispatch == ReadDispatch::Available
+-            && nonempty_read
+-            && self.ring.unsubmitted_sqes() != 0;
+-        op.dispatch_hint = hint;
++        let next = if cfg!(feature = "experimental-burst-read-dispatch")
++            && self.ring.unsubmitted_sqes() != 0
++        {
++            self.read_dispatch.after_admission(read_bytes)
++        } else {
++            None
++        };
++        op.dispatch_hint = next.is_some();
+         let mut operation = op.operation().map_err(|op| RequestError {
+             req: op.req,
+             error: AsyncIoError::IO(std::io::Error::other("invalid I/O window")),
+         })?;
+-        if hint {
++        if next.is_some() {
+             operation.request_async();
+         }
+         self.ring
+@@ -820,8 +840,8 @@ impl AsyncFileEngine {
+                 req: data.into_req(),
+                 error: AsyncIoError::IoUring(error),
+             })?;
+-        if hint {
+-            self.read_dispatch = ReadDispatch::Outstanding;
++        if let Some(next) = next {
++            self.read_dispatch = next;
+         }
+         Ok(())
+     }
+@@ -999,7 +1019,7 @@ impl AsyncFileEngine {
+                 WrappedRequest::Guest(op) => op,
+             };
+             if cfg!(feature = "experimental-burst-read-dispatch") && op.dispatch_hint {
+-                self.read_dispatch = ReadDispatch::Available;
++                self.read_dispatch = self.read_dispatch.after_completion();
+                 op.dispatch_hint = false;
+             }
+             let Some(transfer) = op.transfer.as_mut() else {
+@@ -1135,16 +1155,58 @@ mod tests {
+                 req(),
+             )
+             .unwrap();
+-        assert_eq!(engine.read_dispatch, ReadDispatch::Outstanding);
++        assert_eq!(engine.read_dispatch, ReadDispatch::One);
++        // A large read (even with a 4 KiB first window) cannot take the second slot.
++        engine.set_test_window_limit(4096);
++        push(&mut engine, 0x10000, 8192).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::One);
++        engine.set_test_window_limit(super::super::MAX_IO_BYTES);
++        engine.fail_ring_for_test(1, 0);
++        assert!(push(&mut engine, 0x20000, 4096).is_err());
++        assert_eq!(engine.read_dispatch, ReadDispatch::One);
++        push(&mut engine, 0x20000, 4096).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Two);
+         engine.fail_ring_for_test(0, 1);
+         assert!(engine.kick_submission_queue().is_err());
+-        assert_eq!(engine.read_dispatch, ReadDispatch::Outstanding);
+-        engine.drain(false).unwrap();
+-        let mut sizes: Vec<_> = (0..2)
+-            .map(|_| engine.pop(&mem).unwrap().unwrap().result().unwrap())
+-            .collect();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Two);
++        let mut sizes = Vec::new();
++        while sizes.len() < 4 {
++            engine.drain(false).unwrap();
++            while let Some(cqe) = engine.pop(&mem).unwrap() {
++                sizes.push(cqe.result().unwrap());
++            }
++        }
+         sizes.sort_unstable();
+-        assert_eq!(sizes, [4096, 8192]);
++        assert_eq!(sizes, [4096, 4096, 8192, 8192]);
++        assert_eq!(engine.read_dispatch, ReadDispatch::Available);
++
++        // A genuine short read at the end of a raw device returns its hint after
++        // the first CQE. Its unflagged continuation at EOF reports the confirmed prefix.
++        use std::io::{Seek, SeekFrom};
++        let eof = (&engine.file).seek(SeekFrom::End(0)).unwrap();
++        push(&mut engine, 0, 4096).unwrap();
++        engine
++            .push_read(eof - 4096, &mem, GuestAddress(0x10000), 8192, req())
++            .unwrap();
++        push(&mut engine, 0x20000, 4096).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Two);
++        let mut completed = 0;
++        let mut short_errors = 0;
++        while completed < 3 {
++            engine.drain(false).unwrap();
++            while let Some(cqe) = engine.pop(&mem).unwrap() {
++                completed += 1;
++                match cqe.result() {
++                    Ok(n) => assert_eq!(n, 4096),
++                    Err(e) => {
++                        assert_eq!(e.raw_os_error(), Some(-libc::EIO));
++                        assert_eq!(cqe.progress(), 4096);
++                        short_errors += 1;
++                    }
++                }
++            }
++        }
++        assert_eq!(short_errors, 1);
+         assert_eq!(engine.read_dispatch, ReadDispatch::Available);
+ 
+         // Temporarily deny IOSQE_ASYNC using the kernel's per-ring restriction:
+@@ -1164,10 +1226,11 @@ mod tests {
+                 push(&mut engine, i * 65536, size).unwrap();
+                 assert_eq!(
+                     engine.read_dispatch,
+-                    if i == 0 {
+-                        ReadDispatch::Available
+-                    } else {
+-                        ReadDispatch::Outstanding
++                    match (i, size) {
++                        (0, _) => ReadDispatch::Available,
++                        (1, _) => ReadDispatch::One,
++                        (_, 4096) => ReadDispatch::Two,
++                        _ => ReadDispatch::One,
+                     }
+                 );
+             }
+@@ -1176,13 +1239,14 @@ mod tests {
+             for i in 8..12 {
+                 push(&mut engine, i * 65536, size).unwrap();
+             }
++            let expected_hints = if size == 4096 { 2 } else { 1 };
+             assert_eq!(
+                 engine
+                     .ring
+                     .pending_user_data()
+                     .filter(|w| matches!(w, WrappedRequest::Guest(op) if op.dispatch_hint))
+                     .count(),
+-                1
++                expected_hints
+             );
+             engine.drain(false).unwrap();
+             let mut denied = 0;
+@@ -1195,10 +1259,25 @@ mod tests {
+                     }
+                 }
+             }
+-            assert_eq!(denied, 1);
++            assert_eq!(denied, expected_hints);
+             assert_eq!(engine.read_dispatch, ReadDispatch::Available);
+         }
+ 
++        // None of these later requests can take a hint: the existing direct geometry
++        // rejects a zero-byte scalar, and writes and flushes retain their own paths.
++        push(&mut engine, 0, 4096).unwrap();
++        assert!(matches!(
++            push(&mut engine, 0x2000, 0).unwrap_err().error,
++            AsyncIoError::DirectUnaligned
++        ));
++        engine
++            .push_write(0, &mem, GuestAddress(0x4000), 4096, req())
++            .unwrap();
++        engine.push_flush(req()).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Available);
++        engine.drain(true).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Available);
++
+         // New backing determines eligibility independently of the previous ring.
+         engine
+             .update_file(File::open(&path).unwrap(), None)
+@@ -1221,6 +1300,20 @@ mod tests {
+             assert_eq!(engine.pop(&mem).unwrap().unwrap().result().unwrap(), 4096);
+         }
+         assert_eq!(engine.read_dispatch, ReadDispatch::Disabled);
++        let raw = File::options()
++            .read(true)
++            .custom_flags(libc::O_DIRECT)
++            .open(&path)
++            .unwrap();
++        let dio = DioAlign::probe(&raw).unwrap();
++        engine.update_file(raw, Some(dio)).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Available);
++        for i in 0..4 {
++            push(&mut engine, i * 4096, 4096).unwrap();
++        }
++        assert_eq!(engine.read_dispatch, ReadDispatch::Two);
++        engine.drain(true).unwrap();
++        assert_eq!(engine.read_dispatch, ReadDispatch::Available);
+     }
+ 
+     #[test]
+-- 
+2.43.0
+

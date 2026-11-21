@@ -1,0 +1,139 @@
+From 79719214d0352cc9ca53f91f8da5e76f04b5e786 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 21:05:57 +0200
+Subject: [PATCH] virtio-blk: keep saved indirect support independent of the
+ boot selector
+
+Require a capable VMM build for private 12.2 state. Restore the saved offers and acknowledgements per device even if the same executable would choose a different feature set for a new drive. This keeps build-matched pre-copy independent of the receiver environment.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../src/devices/virtio/block/virtio/mod.rs    |  7 +-
+ .../devices/virtio/block/virtio/persist.rs    |  9 +--
+ src/vmm/src/persist.rs                        | 64 +++++++++++++++++++
+ 3 files changed, 73 insertions(+), 7 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/mod.rs b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+index 275ab7615..73644bcaf 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+@@ -23,8 +23,9 @@ use crate::devices::virtio::queue::FIRECRACKER_MAX_QUEUE_SIZE;
+ /// Virtio 1.2 feature bit for indirect descriptor tables.
+ pub(crate) const INDIRECT_FEATURE: u64 = 1 << 28;
+ 
+-/// Select one block drive for the private indirect-descriptor experiment. The environment is
+-/// set before the process starts and this selection is immutable for its lifetime.
++/// Select one newly constructed block drive for the private indirect-descriptor experiment.
++/// Restored drives keep their saved feature masks. The selector is immutable for the lifetime
++/// of the process.
+ #[cfg(feature = "block-indirect-experiment")]
+ pub(crate) fn experimental_indirect_drive() -> Option<&'static std::ffi::OsStr> {
+     static DRIVE: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+@@ -99,7 +100,7 @@ pub enum VirtioBlockError {
+     IndirectNotOffered(String),
+     /// Block drive {0} offers indirect descriptors without the SG32 contract
+     IndirectWithoutSegMax(String),
+-    /// Block drive {0} requires a destination with indirect descriptors enabled for that drive
++    /// Block drive {0} requires a destination built with indirect descriptor support
+     IndirectRestoreDisabled(String),
+     /// Persistence error: {0}
+     Persist(crate::devices::virtio::persist::PersistError),
+diff --git a/src/vmm/src/devices/virtio/block/virtio/persist.rs b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+index ceb39eb64..7c4c3f375 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/persist.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+@@ -87,11 +87,12 @@ impl VirtioBlockState {
+             return Err(VirtioBlockError::IndirectWithoutSegMax(self.id.clone()));
+         }
+ 
+-        #[cfg(feature = "block-indirect-experiment")]
+-        if experimental_indirect_drive() == Some(std::ffi::OsStr::new(&self.id)) {
+-            return Ok(());
++        // The selector is only a creation policy. Restoring an existing device
++        // takes both of its feature masks from the snapshot.
++        if !cfg!(feature = "block-indirect-experiment") {
++            return Err(VirtioBlockError::IndirectRestoreDisabled(self.id.clone()));
+         }
+-        Err(VirtioBlockError::IndirectRestoreDisabled(self.id.clone()))
++        Ok(())
+     }
+ }
+ 
+diff --git a/src/vmm/src/persist.rs b/src/vmm/src/persist.rs
+index b902f2f51..922115493 100644
+--- a/src/vmm/src/persist.rs
++++ b/src/vmm/src/persist.rs
+@@ -1101,6 +1101,70 @@ mod tests {
+         ));
+     }
+ 
++    #[test]
++    fn test_snapshot_restore_indirect_keeps_each_disk() {
++        use crate::devices::virtio::block::persist::{BlockConstructorArgs, BlockState};
++        use crate::devices::virtio::block::virtio::{INDIRECT_FEATURE, VirtioBlock};
++        use crate::devices::virtio::device::VirtioDevice;
++        use crate::devices::virtio::test_utils::default_mem;
++        use crate::snapshot::SnapshotError;
++
++        let mut vmm = default_vmm();
++        let mut event_manager = EventManager::new().unwrap();
++        let _files = insert_block_devices(
++            &mut vmm,
++            &mut default_kernel_cmdline(),
++            &mut event_manager,
++            ["direct", "indirect"]
++                .into_iter()
++                .map(|id| CustomBlockConfig::new(id.into(), false, None, true, CacheType::Unsafe))
++                .collect(),
++        );
++        let mut state = vmm.save_state(&VmInfo::default()).unwrap();
++        for ack in [0, INDIRECT_FEATURE] {
++            let VirtioDevicesState::Mmio(mmio) = &mut state.device_states.virtio_state else {
++                unreachable!()
++            };
++            let BlockState::Virtio(indirect) = &mut mmio.block_devices[1].device_state else {
++                unreachable!()
++            };
++            indirect.virtio_state.avail_features |= INDIRECT_FEATURE;
++            indirect.virtio_state.acked_features = ack;
++
++            let version = snapshot_version_for(&state);
++            assert_eq!(version, SNAPSHOT_VERSION_INDIRECT_BLOCK);
++            let mut bytes = Vec::new();
++            Snapshot::new_with_version(&state, version)
++                .save(&mut bytes)
++                .unwrap();
++            let loaded = Snapshot::<MicrovmState>::load(&mut bytes.as_slice());
++            if !cfg!(feature = "block-indirect-experiment") {
++                assert!(matches!(
++                    loaded,
++                    Err(SnapshotError::InvalidFormatVersion(v))
++                        if v == SNAPSHOT_VERSION_INDIRECT_BLOCK
++                ));
++                continue;
++            }
++
++            let loaded = loaded.unwrap();
++            validate_block_indirect_state(&loaded).unwrap();
++            let mut masks = Vec::new();
++            for block in native_block_states(&loaded.data) {
++                let restored =
++                    VirtioBlock::restore(BlockConstructorArgs { mem: default_mem() }, block)
++                        .unwrap();
++                assert_eq!(restored.avail_features(), block.virtio_state.avail_features);
++                assert_eq!(restored.acked_features(), block.virtio_state.acked_features);
++                masks.push((
++                    restored.avail_features() & INDIRECT_FEATURE,
++                    restored.acked_features() & INDIRECT_FEATURE,
++                ));
++            }
++            assert_eq!(masks, [(0, 0), (INDIRECT_FEATURE, ack)]);
++        }
++    }
++
+     #[test]
+     fn test_microvm_state_snapshot() {
+         let vmm = default_vmm_with_devices();
+-- 
+2.43.0
+

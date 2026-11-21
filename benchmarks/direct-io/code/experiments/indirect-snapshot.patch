@@ -1,0 +1,390 @@
+From 7fb0e26f34dec796f1a023dacd5752088566a0a8 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:48:50 +0200
+Subject: [PATCH] virtio-blk: version private split indirect snapshots
+
+Reserve snapshot 12.2 for an offered indirect feature. Keep the state layout unchanged and validate the feature, header and destination drive opt-in before constructing a VM. Use the same contract for full snapshots and pre-copy FINAL.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../src/devices/virtio/block/virtio/mod.rs    |  12 +-
+ .../devices/virtio/block/virtio/persist.rs    |  27 +++
+ src/vmm/src/persist.rs                        | 165 ++++++++++++++----
+ src/vmm/src/rpc_interface.rs                  |  28 ---
+ 4 files changed, 165 insertions(+), 67 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/mod.rs b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+index ee43358be..275ab7615 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+@@ -21,9 +21,9 @@ pub use crate::devices::virtio::block::CacheType;
+ use crate::devices::virtio::queue::FIRECRACKER_MAX_QUEUE_SIZE;
+ 
+ /// Virtio 1.2 feature bit for indirect descriptor tables.
+-pub(super) const INDIRECT_FEATURE: u64 = 1 << 28;
++pub(crate) const INDIRECT_FEATURE: u64 = 1 << 28;
+ 
+-/// Select one block drive for the fresh-boot-only experiment. The environment is
++/// Select one block drive for the private indirect-descriptor experiment. The environment is
+ /// set before the process starts and this selection is immutable for its lifetime.
+ #[cfg(feature = "block-indirect-experiment")]
+ pub(crate) fn experimental_indirect_drive() -> Option<&'static std::ffi::OsStr> {
+@@ -46,7 +46,7 @@ pub const MAX_DISCARD_SECTORS: u32 = (128_u32 << 20) / SECTOR_SIZE;
+ /// This is part of the 12.1 snapshot contract; changing it requires a new
+ /// serialized contract and compatibility handling for existing snapshots.
+ ///
+-/// The device has no indirect descriptors, so a request of N segments takes N + 2 descriptors of
++/// In the default direct-descriptor mode, N data segments take N + 2 descriptors of
+ /// the 256-entry ring. 32 lets a guest build 128 KiB requests out of scattered 4 KiB pages;
+ /// seven such 34-descriptor requests fit the ring at once. 32 is also the value of the
+ /// upstream prototype and of other forks, so a guest that negotiated it with this build stays
+@@ -95,6 +95,12 @@ pub enum VirtioBlockError {
+     Interrupt(std::io::Error),
+     /// Error coming from the rate limiter: {0}
+     RateLimiter(std::io::Error),
++    /// Block drive {0} acknowledges indirect descriptors that it did not offer
++    IndirectNotOffered(String),
++    /// Block drive {0} offers indirect descriptors without the SG32 contract
++    IndirectWithoutSegMax(String),
++    /// Block drive {0} requires a destination with indirect descriptors enabled for that drive
++    IndirectRestoreDisabled(String),
+     /// Persistence error: {0}
+     Persist(crate::devices::virtio::persist::PersistError),
+ }
+diff --git a/src/vmm/src/devices/virtio/block/virtio/persist.rs b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+index 9c53d4eaf..ceb39eb64 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/persist.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+@@ -70,6 +70,31 @@ pub struct VirtioBlockState {
+     discard_sector_alignment: u32,
+ }
+ 
++impl VirtioBlockState {
++    pub(crate) fn offers_indirect(&self) -> bool {
++        self.virtio_state.avail_features & INDIRECT_FEATURE != 0
++    }
++
++    pub(crate) fn validate_indirect(&self) -> Result<(), VirtioBlockError> {
++        if !self.offers_indirect() {
++            if self.virtio_state.acked_features & INDIRECT_FEATURE != 0 {
++                return Err(VirtioBlockError::IndirectNotOffered(self.id.clone()));
++            }
++            return Ok(());
++        }
++
++        if self.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_SEG_MAX) == 0 {
++            return Err(VirtioBlockError::IndirectWithoutSegMax(self.id.clone()));
++        }
++
++        #[cfg(feature = "block-indirect-experiment")]
++        if experimental_indirect_drive() == Some(std::ffi::OsStr::new(&self.id)) {
++            return Ok(());
++        }
++        Err(VirtioBlockError::IndirectRestoreDisabled(self.id.clone()))
++    }
++}
++
+ impl Persist<'_> for VirtioBlock {
+     type State = VirtioBlockState;
+     type ConstructorArgs = BlockConstructorArgs;
+@@ -97,6 +122,8 @@ impl Persist<'_> for VirtioBlock {
+         constructor_args: Self::ConstructorArgs,
+         state: &Self::State,
+     ) -> Result<Self, Self::Error> {
++        state.validate_indirect()?;
++
+         let is_read_only = state.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_RO) != 0;
+         let discard = state.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0;
+         let rate_limiter = RateLimiter::restore((), &state.rate_limiter_state)
+diff --git a/src/vmm/src/persist.rs b/src/vmm/src/persist.rs
+index 001b35407..b902f2f51 100644
+--- a/src/vmm/src/persist.rs
++++ b/src/vmm/src/persist.rs
+@@ -167,45 +167,53 @@ pub enum CreateSnapshotError {
+     Migration(#[from] crate::migration::MigrationError),
+ }
+ 
+-/// Snapshot version: the newest format this build reads and writes.
+-///
+-/// 12.1 is 12.0 plus one meaning: a virtio block device which offers
+-/// `VIRTIO_BLK_F_SEG_MAX` (several data descriptors per request). The state layout is the same.
+-/// A snapshot is written as 12.1 only when such a device is in it (see
+-/// [`snapshot_version_for`]), so a VMM that knows only 12.0 (one data descriptor per request)
+-/// refuses exactly the snapshots it would misread, and still loads every other one.
+-pub const SNAPSHOT_VERSION: Version = Version::new(12, 1, 0);
+-
+-/// The format of a snapshot without a multi-segment block device: readable by 12.0 VMMs.
++/// Latest snapshot format accepted by this build.
++#[cfg(feature = "block-indirect-experiment")]
++pub const SNAPSHOT_VERSION: Version = SNAPSHOT_VERSION_INDIRECT_BLOCK;
++/// Latest snapshot format accepted by this build.
++#[cfg(not(feature = "block-indirect-experiment"))]
++pub const SNAPSHOT_VERSION: Version = SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK;
++
++/// Original format, before block devices offered SEG_MAX.
+ pub const SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK: Version = Version::new(12, 0, 0);
++/// Same layout as 12.0, with the SG32 block configuration contract.
++const SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK: Version = Version::new(12, 1, 0);
++/// Same layout as 12.1, with split indirect descriptors offered by a native block device.
++const SNAPSHOT_VERSION_INDIRECT_BLOCK: Version = Version::new(12, 2, 0);
++
++fn native_block_states(
++    state: &MicrovmState,
++) -> impl Iterator<Item = &crate::devices::virtio::block::virtio::persist::VirtioBlockState> {
++    use crate::devices::virtio::block::persist::BlockState;
+ 
+-/// The format version to write `state` with: 12.1 if a virtio block device offers
+-/// `VIRTIO_BLK_F_SEG_MAX`, 12.0 otherwise.
++    let (mmio, pci) = match &state.device_states.virtio_state {
++        VirtioDevicesState::Mmio(mmio) => (mmio.block_devices.as_slice(), &[][..]),
++        VirtioDevicesState::Pci(pci) => (&[][..], pci.block_devices.as_slice()),
++    };
++    mmio.iter()
++        .map(|device| &device.device_state)
++        .chain(pci.iter().map(|device| &device.device_state))
++        .filter_map(|device| match device {
++            BlockState::Virtio(block) => Some(block),
++            BlockState::VhostUser(_) => None,
++        })
++}
++
++/// Select the oldest format that represents the block features offered in this state.
++/// The guest can negotiate an offered feature after restore, so ACK is not decisive.
+ pub fn snapshot_version_for(state: &MicrovmState) -> Version {
+-    use crate::devices::virtio::block::persist::BlockState;
+     use crate::devices::virtio::generated::virtio_blk::VIRTIO_BLK_F_SEG_MAX;
+ 
+-    let multi_segment = |block: &BlockState| match block {
+-        BlockState::Virtio(block) => {
+-            block.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_SEG_MAX) != 0
++    let mut version = SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK;
++    for block in native_block_states(state) {
++        if block.offers_indirect() {
++            return SNAPSHOT_VERSION_INDIRECT_BLOCK;
++        }
++        if block.virtio_state.avail_features & (1u64 << VIRTIO_BLK_F_SEG_MAX) != 0 {
++            version = SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK;
+         }
+-        BlockState::VhostUser(_) => false,
+-    };
+-    let any = match &state.device_states.virtio_state {
+-        VirtioDevicesState::Mmio(mmio) => mmio
+-            .block_devices
+-            .iter()
+-            .any(|d| multi_segment(&d.device_state)),
+-        VirtioDevicesState::Pci(pci) => pci
+-            .block_devices
+-            .iter()
+-            .any(|d| multi_segment(&d.device_state)),
+-    };
+-    if any {
+-        SNAPSHOT_VERSION
+-    } else {
+-        SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK
+     }
++    version
+ }
+ 
+ /// Creates a Microvm snapshot.
+@@ -623,18 +631,41 @@ pub enum SnapshotStateFromFileError {
+     Open(#[from] std::io::Error),
+     /// Failed to load snapshot state from file: {0}
+     Load(#[from] crate::snapshot::SnapshotError),
++    /// Snapshot version {0} does not match the offered block indirect feature
++    BlockIndirectVersion(Version),
++    /// Invalid block indirect state: {0}
++    BlockIndirectState(crate::devices::virtio::block::virtio::VirtioBlockError),
+     /// Unknown Network Device.
+     UnknownNetworkDevice,
+     /// Unknown Vsock Device.
+     UnknownVsockDevice,
+ }
+ 
++fn validate_block_indirect_state(
++    snapshot: &Snapshot<MicrovmState>,
++) -> Result<(), SnapshotStateFromFileError> {
++    let indirect_version = snapshot.version().minor == SNAPSHOT_VERSION_INDIRECT_BLOCK.minor;
++    let offers_indirect = native_block_states(&snapshot.data).any(|block| block.offers_indirect());
++    if indirect_version != offers_indirect {
++        return Err(SnapshotStateFromFileError::BlockIndirectVersion(
++            snapshot.version().clone(),
++        ));
++    }
++
++    for block in native_block_states(&snapshot.data) {
++        block
++            .validate_indirect()
++            .map_err(SnapshotStateFromFileError::BlockIndirectState)?;
++    }
++    Ok(())
++}
++
+ fn snapshot_state_from_file(
+     snapshot_path: &Path,
+ ) -> Result<MicrovmState, SnapshotStateFromFileError> {
+     let mut snapshot_reader = File::open(snapshot_path)?;
+     let snapshot = Snapshot::load(&mut snapshot_reader)?;
+-
++    validate_block_indirect_state(&snapshot)?;
+     Ok(snapshot.data)
+ }
+ 
+@@ -650,6 +681,7 @@ fn snapshot_state_from_migration(
+     }
+     let snapshot =
+         Snapshot::load(&mut bytes.as_slice()).map_err(SnapshotStateFromFileError::Load)?;
++    validate_block_indirect_state(&snapshot)?;
+     Ok(snapshot.data)
+ }
+ 
+@@ -964,7 +996,10 @@ mod tests {
+         );
+         let state = vmm.save_state(&VmInfo::default()).unwrap();
+         // An unbooted device may negotiate the offered bit after restore.
+-        assert_eq!(snapshot_version_for(&state), SNAPSHOT_VERSION);
++        assert_eq!(
++            snapshot_version_for(&state),
++            SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK
++        );
+ 
+         let mut state = state;
+         let VirtioDevicesState::Mmio(mmio) = &mut state.device_states.virtio_state else {
+@@ -986,7 +1021,10 @@ mod tests {
+             unreachable!()
+         };
+         block.virtio_state.avail_features |= 1u64 << VIRTIO_BLK_F_SEG_MAX;
+-        assert_eq!(snapshot_version_for(&state), SNAPSHOT_VERSION);
++        assert_eq!(
++            snapshot_version_for(&state),
++            SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK
++        );
+ 
+         // What a 12.0 reader decides on each: the same check as `Snapshot::load`.
+         let old_minor = SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK.minor;
+@@ -998,7 +1036,10 @@ mod tests {
+         assert!(old_reader_accepts(&SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK));
+ 
+         // This build loads both.
+-        for version in [SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK, SNAPSHOT_VERSION] {
++        for version in [
++            SNAPSHOT_VERSION_SINGLE_SEGMENT_BLOCK,
++            SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK,
++        ] {
+             let mut buf = Vec::new();
+             Snapshot::new_with_version(&state, version.clone())
+                 .save(&mut buf)
+@@ -1008,6 +1049,58 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn test_snapshot_indirect_feature_contract() {
++        use crate::devices::virtio::block::persist::BlockState;
++        use crate::devices::virtio::block::virtio::{INDIRECT_FEATURE, VirtioBlockError};
++
++        let mut vmm = default_vmm();
++        let mut event_manager = EventManager::new().unwrap();
++        insert_block_devices(
++            &mut vmm,
++            &mut default_kernel_cmdline(),
++            &mut event_manager,
++            vec![CustomBlockConfig::new(
++                "root".into(),
++                true,
++                None,
++                true,
++                CacheType::Unsafe,
++            )],
++        );
++        let mut state = vmm.save_state(&VmInfo::default()).unwrap();
++        let VirtioDevicesState::Mmio(mmio) = &mut state.device_states.virtio_state else {
++            unreachable!()
++        };
++        let BlockState::Virtio(block) = &mut mmio.block_devices[0].device_state else {
++            unreachable!()
++        };
++        let saved_features = &mut block.virtio_state;
++        saved_features.acked_features |= INDIRECT_FEATURE;
++        assert!(matches!(
++            block.validate_indirect(),
++            Err(VirtioBlockError::IndirectNotOffered(_))
++        ));
++        block.virtio_state.acked_features &= !INDIRECT_FEATURE;
++        block.virtio_state.avail_features |= INDIRECT_FEATURE;
++
++        assert_eq!(
++            snapshot_version_for(&state),
++            SNAPSHOT_VERSION_INDIRECT_BLOCK
++        );
++        let old_header = Snapshot::new_with_version(state, SNAPSHOT_VERSION_MULTI_SEGMENT_BLOCK);
++        assert!(matches!(
++            validate_block_indirect_state(&old_header),
++            Err(SnapshotStateFromFileError::BlockIndirectVersion(_))
++        ));
++        let new_header =
++            Snapshot::new_with_version(MicrovmState::default(), SNAPSHOT_VERSION_INDIRECT_BLOCK);
++        assert!(matches!(
++            validate_block_indirect_state(&new_header),
++            Err(SnapshotStateFromFileError::BlockIndirectVersion(_))
++        ));
++    }
++
+     #[test]
+     fn test_microvm_state_snapshot() {
+         let vmm = default_vmm_with_devices();
+diff --git a/src/vmm/src/rpc_interface.rs b/src/vmm/src/rpc_interface.rs
+index 0a4578248..9e8087ccb 100644
+--- a/src/vmm/src/rpc_interface.rs
++++ b/src/vmm/src/rpc_interface.rs
+@@ -175,28 +175,6 @@ pub enum VmmAction {
+     GetMigrationMemoryDigest,
+ }
+ 
+-#[cfg(feature = "block-indirect-experiment")]
+-impl VmmAction {
+-    fn reject_indirect_state_transfer(&self) -> Result<(), VmmActionError> {
+-        use crate::devices::virtio::block::virtio::experimental_indirect_drive;
+-        if matches!(
+-            self,
+-            Self::CreateSnapshot(_)
+-                | Self::LoadSnapshot(_)
+-                | Self::GetMigration
+-                | Self::MigrationSendRound(_)
+-                | Self::MigrationReceiveRound(_)
+-                | Self::GetMigrationMemoryDigest
+-        ) && experimental_indirect_drive().is_some()
+-        {
+-            return Err(VmmActionError::NotSupported(
+-                "private block indirect experiment disables snapshots and migration".into(),
+-            ));
+-        }
+-        Ok(())
+-    }
+-}
+-
+ /// Wrapper for all errors associated with VMM actions.
+ #[derive(Debug, thiserror::Error, displaydoc::Display)]
+ pub enum VmmActionError {
+@@ -493,9 +471,6 @@ impl<'a> PrebootApiController<'a> {
+         &mut self,
+         request: VmmAction,
+     ) -> Result<VmmData, VmmActionError> {
+-        #[cfg(feature = "block-indirect-experiment")]
+-        request.reject_indirect_state_transfer()?;
+-
+         use self::VmmAction::*;
+ 
+         match request {
+@@ -801,9 +776,6 @@ impl RuntimeApiController {
+         request: VmmAction,
+         event_manager: &mut EventManager,
+     ) -> Result<VmmData, VmmActionError> {
+-        #[cfg(feature = "block-indirect-experiment")]
+-        request.reject_indirect_state_transfer()?;
+-
+         use self::VmmAction::*;
+         match request {
+             // Supported operations allowed post-boot.
+-- 
+2.43.0
+

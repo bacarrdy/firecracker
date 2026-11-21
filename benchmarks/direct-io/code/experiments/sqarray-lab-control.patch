@@ -1,0 +1,64 @@
+From b3d98f9712a63eabda2962b9e02d9fbf273b06d7 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:12:22 +0200
+Subject: [PATCH 2/3] qa: select and report the active SQ layout in comparison
+ builds
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+
+diff --git a/src/vmm/Cargo.toml b/src/vmm/Cargo.toml
+index 36861e006..6b77c995e 100644
+--- a/src/vmm/Cargo.toml
++++ b/src/vmm/Cargo.toml
+@@ -9,6 +9,7 @@ license = "Apache-2.0"
+ bench = false
+ 
+ [features]
++qa-sqarray = []
+ default = []
+ tracing = ["log-instrument"]
+ gdb = ["gdbstub", "gdbstub_arch"]
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 57f6e1216..a005dcff1 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -146,8 +146,17 @@ impl<T: Debug> IoUring<T> {
+         eventfd: Option<RawFd>,
+         required_ops: &[OpCode],
+     ) -> Result<Self, IoUringError> {
+-        let (file, params) = setup_ring(num_entries, generated::IORING_SETUP_NO_SQARRAY)
+-            .or_else(|err| {
++        #[cfg(not(feature = "qa-sqarray"))]
++        let prefer_direct = true;
++        #[cfg(feature = "qa-sqarray")]
++        let prefer_direct = match std::env::var("FC_QA_SQARRAY").as_deref() {
++            Ok("legacy") => false,
++            Ok("auto") | Err(std::env::VarError::NotPresent) => true,
++            other => panic!("unexpected FC_QA_SQARRAY: {other:?}"),
++        };
++        let direct_flag = generated::IORING_SETUP_NO_SQARRAY;
++        let (file, params) = if prefer_direct {
++            setup_ring(num_entries, direct_flag).or_else(|err| {
+                 // Kernels predating NO_SQARRAY reject the flag with EINVAL.
+                 if err.raw_os_error() == Some(libc::EINVAL) {
+                     setup_ring(num_entries, 0)
+@@ -155,7 +164,15 @@ impl<T: Debug> IoUring<T> {
+                     Err(err)
+                 }
+             })
+-            .map_err(IoUringError::Setup)?;
++        } else {
++            setup_ring(num_entries, 0)
++        }
++        .map_err(IoUringError::Setup)?;
++        #[cfg(feature = "qa-sqarray")]
++        eprintln!(
++            "QA io_uring_setup entries={} flags={:#x} sq_array_offset={}",
++            params.sq_entries, params.flags, params.sq_off.array
++        );
+         let fd = file.as_raw_fd();
+         Self::check_features(params)?;
+ 
+-- 
+2.43.0
+

@@ -1,0 +1,662 @@
+From 1202e5f5ce4f1c868270ff154d289018b4333302 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:30:55 +0200
+Subject: [PATCH] virtio-blk: exercise polling the io_uring completion fd
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/Cargo.toml                            |   1 +
+ src/vmm/src/device_manager/mod.rs             |  15 +++
+ src/vmm/src/devices/virtio/block/device.rs    |   8 +-
+ .../src/devices/virtio/block/virtio/device.rs |  42 +++++--
+ .../virtio/block/virtio/event_handler.rs      | 116 ++++++++++++++++--
+ .../virtio/block/virtio/event_tests.rs        |   4 +-
+ .../virtio/block/virtio/io/async_io.rs        |  97 +++++++++++++--
+ .../src/devices/virtio/block/virtio/io/mod.rs |   7 +-
+ src/vmm/src/io_uring/mod.rs                   |  25 ++++
+ src/vmm/src/lib.rs                            |  16 ++-
+ src/vmm/src/rpc_interface.rs                  |   5 +-
+ 11 files changed, 295 insertions(+), 41 deletions(-)
+
+diff --git a/src/vmm/Cargo.toml b/src/vmm/Cargo.toml
+index 36861e006..84b879802 100644
+--- a/src/vmm/Cargo.toml
++++ b/src/vmm/Cargo.toml
+@@ -9,6 +9,7 @@ license = "Apache-2.0"
+ bench = false
+ 
+ [features]
++qa-epoll-fd = []
+ default = []
+ tracing = ["log-instrument"]
+ gdb = ["gdbstub", "gdbstub_arch"]
+diff --git a/src/vmm/src/device_manager/mod.rs b/src/vmm/src/device_manager/mod.rs
+index 166dd7398..d605e945e 100644
+--- a/src/vmm/src/device_manager/mod.rs
++++ b/src/vmm/src/device_manager/mod.rs
+@@ -437,6 +437,21 @@ impl DeviceManager {
+         }
+     }
+ 
++    pub(crate) fn virtio_subscriber(
++        &self,
++        device_type: VirtioDeviceType,
++        device_id: &str,
++    ) -> Option<event_manager::SubscriberId> {
++        match &self.virtio_devices {
++            VirtioDevices::Mmio(devices) => devices
++                .get_virtio_device(device_type, device_id)
++                .and_then(|device| device.sub_id),
++            VirtioDevices::Pci(devices) => devices
++                .get_virtio_device(device_type, device_id)
++                .and_then(|device| device.lock().expect("Poisoned lock").sub_id),
++        }
++    }
++
+     /// Run fn `f()` for the virtio device matching `virtio_type` and `id`.
+     pub fn with_virtio_device<T, F, R>(&self, id: &str, f: F) -> Result<R, FindDeviceError>
+     where
+diff --git a/src/vmm/src/devices/virtio/block/device.rs b/src/vmm/src/devices/virtio/block/device.rs
+index 9c4439af5..727905509 100644
+--- a/src/vmm/src/devices/virtio/block/device.rs
++++ b/src/vmm/src/devices/virtio/block/device.rs
+@@ -50,10 +50,14 @@ impl Block {
+         }
+     }
+ 
+-    pub fn update_disk_image(&mut self, disk_image_path: String) -> Result<(), BlockError> {
++    pub(crate) fn update_disk_image(
++        &mut self,
++        disk_image_path: String,
++        completion_ops: &mut EventOps,
++    ) -> Result<(), BlockError> {
+         match self {
+             Self::Virtio(b) => b
+-                .update_disk_image(disk_image_path)
++                .update_disk_image_with_event_ops(disk_image_path, Some(completion_ops))
+                 .map_err(BlockError::VirtioBackend),
+             Self::VhostUser(_) => Err(BlockError::InvalidBlockBackend),
+         }
+diff --git a/src/vmm/src/devices/virtio/block/virtio/device.rs b/src/vmm/src/devices/virtio/block/virtio/device.rs
+index f25e87e86..994e27a3e 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/device.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/device.rs
+@@ -199,6 +199,7 @@ impl DiskProperties {
+         &mut self,
+         disk_image_path: String,
+         is_disk_read_only: bool,
++        completion_ops: Option<&mut event_manager::EventOps>,
+     ) -> Result<(), VirtioBlockError> {
+         let (mut disk_image, dio) =
+             Self::open_file(&disk_image_path, is_disk_read_only, self.direct_write)?;
+@@ -217,7 +218,7 @@ impl DiskProperties {
+ 
+         let image_id = Self::build_disk_image_id(&disk_image);
+         self.file_engine
+-            .update_file_path(disk_image, dio)
++            .update_file_path(disk_image, dio, completion_ops)
+             .map_err(VirtioBlockError::FileEngine)?;
+         self.image_id = image_id;
+         self.nsectors = disk_size >> SECTOR_SHIFT;
+@@ -932,15 +933,19 @@ impl VirtioBlock {
+     pub fn process_async_completion_event(&mut self) {
+         let engine = unwrap_async_file_engine_or_return!(&mut self.disk.file_engine);
+ 
+-        if let Err(err) = engine.completion_evt().read() {
++        if let Err(err) = engine.acknowledge_completion(true) {
+             error!("Failed to get async completion event: {:?}", err);
+-        } else {
+-            if let Err(err) = self.process_async_completion_queue() {
+-                error!("Failed to process block completions: {:?}", err);
++            if engine.uses_ring_fd() {
+                 self.retry_timer.arm(Duration::from_millis(10), None);
+             }
+-            self.resume_queue();
++            return;
+         }
++
++        if let Err(err) = self.process_async_completion_queue() {
++            error!("Failed to process block completions: {:?}", err);
++            self.retry_timer.arm(Duration::from_millis(10), None);
++        }
++        self.resume_queue();
+     }
+ 
+     /// Resume a queue stopped by a full io_uring, or held for the bounce path (whether the
+@@ -973,9 +978,14 @@ impl VirtioBlock {
+     }
+ 
+     /// Update the backing file and the config space of the block device.
+-    pub fn update_disk_image(&mut self, disk_image_path: String) -> Result<(), VirtioBlockError> {
++    pub(crate) fn update_disk_image_with_event_ops(
++        &mut self,
++        disk_image_path: String,
++        completion_ops: Option<&mut event_manager::EventOps>,
++    ) -> Result<(), VirtioBlockError> {
+         self.quiesce().map_err(VirtioBlockError::FileEngine)?;
+-        self.disk.update(disk_image_path, self.read_only)?;
++        self.disk
++            .update(disk_image_path, self.read_only, completion_ops)?;
+         self.config_space.capacity = self.disk.nsectors.to_le(); // virtio_block_config_space();
+ 
+         // Kick the driver to pick up the changes. (But only if the device is already activated).
+@@ -989,6 +999,14 @@ impl VirtioBlock {
+         Ok(())
+     }
+ 
++    #[cfg(test)]
++    pub(crate) fn update_disk_image(
++        &mut self,
++        disk_image_path: String,
++    ) -> Result<(), VirtioBlockError> {
++        self.update_disk_image_with_event_ops(disk_image_path, None)
++    }
++
+     /// Updates the parameters for the rate limiter
+     pub fn update_rate_limiter(&mut self, bytes: BucketUpdate, ops: BucketUpdate) {
+         self.rate_limiter.update_buckets(bytes, ops);
+@@ -2651,7 +2669,11 @@ mod tests {
+         // fsync on /dev/null fails with EINVAL on Linux. Replacing the test engine's
+         // file isolates the error path without modifying a real backing file.
+         let null = OpenOptions::new().write(true).open("/dev/null").unwrap();
+-        block.disk.file_engine.update_file_path(null, None).unwrap();
++        block
++            .disk
++            .file_engine
++            .update_file_path(null, None, None)
++            .unwrap();
+         assert!(block.prepare_save().is_err());
+     }
+ 
+@@ -3356,7 +3378,7 @@ mod tests {
+             Err(VirtioBlockError::BackingFile(_, _))
+         ));
+         assert!(matches!(
+-            disk.update(bad, false),
++            disk.update(bad, false, None),
+             Err(VirtioBlockError::BackingFile(_, _))
+         ));
+         assert_eq!(disk.file_path, path);
+diff --git a/src/vmm/src/devices/virtio/block/virtio/event_handler.rs b/src/vmm/src/devices/virtio/block/virtio/event_handler.rs
+index a92755ff0..c46ceb817 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/event_handler.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/event_handler.rs
+@@ -15,7 +15,7 @@ impl VirtioBlock {
+     const PROCESS_ASYNC_COMPLETION: u32 = 3;
+     const PROCESS_RETRY: u32 = 4;
+ 
+-    fn register_runtime_events(&self, ops: &mut EventOps) {
++    fn register_runtime_events(&mut self, ops: &mut EventOps) {
+         if let Err(err) = ops.add(Events::with_data(
+             &self.queue_evts[0],
+             Self::PROCESS_QUEUE,
+@@ -42,14 +42,18 @@ impl VirtioBlock {
+                 std::process::abort();
+             }
+         }
+-        if let FileEngine::Async(ref engine) = self.disk.file_engine
+-            && let Err(err) = ops.add(Events::with_data(
+-                engine.completion_evt(),
++        if let FileEngine::Async(ref mut engine) = self.disk.file_engine {
++            let watch = Events::with_data_raw(
++                engine.completion_fd(),
+                 Self::PROCESS_ASYNC_COMPLETION,
+                 EventSet::IN,
+-            ))
+-        {
+-            error!("Failed to register IO engine completion event: {}", err);
++            );
++            if let Err(err) = engine.register_completion(watch, ops) {
++                error!("Failed to register IO engine completion event: {}", err);
++                if engine.uses_ring_fd() {
++                    std::process::abort();
++                }
++            }
+         }
+     }
+ 
+@@ -63,7 +67,7 @@ impl VirtioBlock {
+         }
+     }
+ 
+-    fn process_activate_event(&self, ops: &mut EventOps) {
++    fn process_activate_event(&mut self, ops: &mut EventOps) {
+         if let Err(err) = self.activate_evt.read() {
+             error!("Failed to consume block activate event: {:?}", err);
+         }
+@@ -122,7 +126,7 @@ impl MutEventSubscriber for VirtioBlock {
+                 }
+                 Self::PROCESS_ASYNC_COMPLETION => {
+                     if let FileEngine::Async(ref engine) = self.disk.file_engine {
+-                        let _ = engine.completion_evt().read();
++                        let _ = engine.acknowledge_completion(false);
+                     }
+                 }
+                 _ => (),
+@@ -196,6 +200,100 @@ mod tests {
+         assert_eq!(vq.used.idx.get(), 1);
+     }
+ 
++    #[test]
++    fn test_registered_completion_survives_replacement_and_rollback() {
++        let mut event_manager = EventManager::new().unwrap();
++        let mut block = default_block(FileEngineType::Async);
++        let mem = default_mem();
++        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
++        set_queue(&mut block, 0, vq.create_queue());
++        read_blk_req_descriptors(&vq);
++        vq.dtable[0].len.set(16);
++        vq.dtable[1].flags.set(VIRTQ_DESC_F_NEXT);
++        vq.dtable[1].len.set(512);
++        vq.dtable[2].len.set(1);
++        let header = GuestAddress(vq.dtable[0].addr.get());
++        mem.write_obj::<u32>(VIRTIO_BLK_T_OUT, header).unwrap();
++        let data = GuestAddress(vq.dtable[1].addr.get());
++        mem.write_obj::<u64>(0x1234, data).unwrap();
++
++        let replacement = vmm_sys_util::tempfile::TempFile::new().unwrap();
++        replacement.as_file().set_len(4096).unwrap();
++        let path = replacement.as_path().to_str().unwrap().to_owned();
++        let completion = |block: &VirtioBlock| {
++            let FileEngine::Async(engine) = &block.disk.file_engine else {
++                unreachable!()
++            };
++            (engine.completion_fd(), engine.uses_ring_fd())
++        };
++
++        // An API update after activate() but before the activation callback must
++        // leave registration to that callback.
++        let block = Arc::new(Mutex::new(block));
++        let subscriber = event_manager.add_subscriber(block.clone());
++        let before = completion(&block.lock().unwrap());
++        block
++            .lock()
++            .unwrap()
++            .activate(mem.clone(), default_interrupt())
++            .unwrap();
++        block
++            .lock()
++            .unwrap()
++            .update_disk_image_with_event_ops(
++                path.clone(),
++                Some(&mut event_manager.event_ops(subscriber).unwrap()),
++            )
++            .unwrap();
++        let first = completion(&block.lock().unwrap());
++        assert_eq!(before.0 != first.0, first.1);
++        event_manager.run_with_timeout(100).unwrap();
++
++        if first.1 {
++            // Force an EPOLL_CTL_DEL failure after adding the new, valid ring.
++            let mut ops = event_manager.event_ops(subscriber).unwrap();
++            let old_watch =
++                Events::with_data_raw(first.0, VirtioBlock::PROCESS_ASYNC_COMPLETION, EventSet::IN);
++            ops.remove(old_watch).unwrap();
++            let err = block
++                .lock()
++                .unwrap()
++                .update_disk_image_with_event_ops(path.clone(), Some(&mut ops))
++                .unwrap_err();
++            assert!(err.to_string().contains("completion ring registered"), "{err}");
++            assert_eq!(completion(&block.lock().unwrap()), first);
++            ops.add(old_watch).unwrap();
++        }
++
++        let final_disk = vmm_sys_util::tempfile::TempFile::new().unwrap();
++        final_disk.as_file().set_len(4096).unwrap();
++        let path = final_disk.as_path().to_str().unwrap().to_owned();
++        block
++            .lock()
++            .unwrap()
++            .update_disk_image_with_event_ops(
++                path,
++                Some(&mut event_manager.event_ops(subscriber).unwrap()),
++            )
++            .unwrap();
++        let last = completion(&block.lock().unwrap());
++        assert_eq!(first.0 != last.0, first.1);
++
++        block.lock().unwrap().queue_evts[0].write(1).unwrap();
++        for _ in 0..20 {
++            event_manager.run_with_timeout(100).unwrap();
++            if vq.used.idx.get() != 0 {
++                break;
++            }
++        }
++        assert_eq!(vq.used.idx.get(), 1);
++        let mut bytes = [0u8; 8];
++        std::os::unix::fs::FileExt::read_exact_at(final_disk.as_file(), &mut bytes, 0).unwrap();
++        assert_eq!(u64::from_le_bytes(bytes), 0x1234);
++        std::os::unix::fs::FileExt::read_exact_at(replacement.as_file(), &mut bytes, 0).unwrap();
++        assert_eq!(bytes, [0; 8]);
++    }
++
+     #[test]
+     fn test_event_handler() {
+         let mut event_manager = EventManager::new().unwrap();
+diff --git a/src/vmm/src/devices/virtio/block/virtio/event_tests.rs b/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
+index 23abb1b8c..7e85e1cf7 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
+@@ -251,7 +251,7 @@ impl<'a> Guest<'a> {
+ /// the completion eventfd) and handle what fired. Returns whether an event fired.
+ fn poll_once(block: &mut VirtioBlock, wait: Duration) -> bool {
+     let cfd = match &block.disk.file_engine {
+-        FileEngine::Async(e) => Some(e.completion_evt().as_raw_fd()),
++        FileEngine::Async(e) => Some(e.completion_fd()),
+         FileEngine::Sync(_) => None,
+     };
+     let rfd = block.rate_limiter.as_raw_fd();
+@@ -333,7 +333,7 @@ fn wait_cqe_posted(block: &VirtioBlock) {
+         return;
+     };
+     let mut p = libc::pollfd {
+-        fd: e.completion_evt().as_raw_fd(),
++        fd: e.completion_fd(),
+         events: libc::POLLIN,
+         revents: 0,
+     };
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index 6de99f4ef..70e5a1198 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -10,6 +10,7 @@ use std::os::unix::fs::FileTypeExt;
+ use std::os::unix::io::AsRawFd;
+ use std::time::{Duration, Instant};
+ 
++use event_manager::{EventOps, Events};
+ use vm_memory::{GuestMemoryBackend, GuestMemoryError};
+ use vmm_sys_util::eventfd::EventFd;
+ 
+@@ -43,6 +44,10 @@ pub enum AsyncIoError {
+     SyncAll(std::io::Error),
+     /// EventFd: {0}
+     EventFd(std::io::Error),
++    /// Missing event operations for a registered completion ring.
++    MissingCompletionOps,
++    /// Failed to switch the completion ring registered with the event manager: {0}
++    CompletionRegistration(event_manager::Error),
+     /// GuestMemory: {0}
+     GuestMemory(GuestMemoryError),
+     /// Direct I/O request not aligned for the O_DIRECT descriptor (it needs the bounce path)
+@@ -57,7 +62,8 @@ pub struct AsyncFileEngine {
+     /// The `O_DIRECT` alignment of a direct-I/O drive (`io::direct`); `None`: buffered drive.
+     dio: Option<DioAlign>,
+     ring: IoUring<WrappedRequest>,
+-    completion_evt: EventFd,
++    completion_evt: Option<EventFd>,
++    completion_watch: Option<Events>,
+     discard_op: Option<AsyncDiscardOp>,
+     /// Accepted transfers the ring did not take yet: the next window of a request and the next
+     /// transfer of the bounce in progress. `submit_pending` pushes them; until they are all in
+@@ -247,7 +253,7 @@ impl AsyncFileEngine {
+ 
+     fn new_ring(
+         file: &File,
+-        completion_fd: RawFd,
++        completion_fd: Option<RawFd>,
+         discard_op: Option<AsyncDiscardOp>,
+     ) -> Result<IoUring<WrappedRequest>, IoUringError> {
+         let mut restrictions = vec![
+@@ -284,7 +290,7 @@ impl AsyncFileEngine {
+             u32::from(IO_URING_NUM_ENTRIES),
+             vec![file],
+             restrictions,
+-            Some(completion_fd),
++            completion_fd,
+             &required_ops,
+         )
+     }
+@@ -296,16 +302,27 @@ impl AsyncFileEngine {
+     ) -> Result<AsyncFileEngine, AsyncIoError> {
+         log_dev_preview_warning("Async file IO", Option::None);
+ 
+-        let completion_evt = EventFd::new(libc::EFD_NONBLOCK).map_err(AsyncIoError::EventFd)?;
++        let use_ring_fd = cfg!(feature = "qa-epoll-fd")
++            && std::env::var_os("FC_QA_EPOLL_COMPLETION").as_deref()
++                == Some(std::ffi::OsStr::new("ring"));
++        let completion_evt = (!use_ring_fd)
++            .then(|| EventFd::new(libc::EFD_NONBLOCK))
++            .transpose()
++            .map_err(AsyncIoError::EventFd)?;
+         let discard_op = Self::discard_op(&file, discard)?;
+-        let ring = Self::new_ring(&file, completion_evt.as_raw_fd(), discard_op)
+-            .map_err(AsyncIoError::IoUring)?;
++        let ring = Self::new_ring(
++            &file,
++            completion_evt.as_ref().map(AsRawFd::as_raw_fd),
++            discard_op,
++        )
++        .map_err(AsyncIoError::IoUring)?;
+ 
+         Ok(AsyncFileEngine {
+             file,
+             dio,
+             ring,
+             completion_evt,
++            completion_watch: None,
+             discard_op,
+             continuations: VecDeque::with_capacity(usize::from(IO_URING_NUM_ENTRIES) * 2),
+             bounce_buf: None,
+@@ -315,7 +332,12 @@ impl AsyncFileEngine {
+         })
+     }
+ 
+-    pub fn update_file(&mut self, file: File, dio: Option<DioAlign>) -> Result<(), AsyncIoError> {
++    pub fn update_file(
++        &mut self,
++        file: File,
++        dio: Option<DioAlign>,
++        completion_ops: Option<&mut EventOps>,
++    ) -> Result<(), AsyncIoError> {
+         // The device quiesces first (`VirtioBlock::update_disk_image`): the ring replaced here
+         // would drop what it holds, and a bounce in progress transfers through it.
+         if self.in_flight() != 0 {
+@@ -324,8 +346,30 @@ impl AsyncFileEngine {
+             )));
+         }
+         let discard_op = Self::discard_op(&file, self.discard_op.is_some())?;
+-        let ring = Self::new_ring(&file, self.completion_evt.as_raw_fd(), discard_op)
+-            .map_err(AsyncIoError::IoUring)?;
++        let ring = Self::new_ring(
++            &file,
++            self.completion_evt.as_ref().map(AsRawFd::as_raw_fd),
++            discard_op,
++        )
++        .map_err(AsyncIoError::IoUring)?;
++
++        if self.completion_evt.is_none()
++            && let Some(old_watch) = self.completion_watch
++        {
++            let ops = completion_ops.ok_or(AsyncIoError::MissingCompletionOps)?;
++            let new_watch =
++                Events::with_data_raw(ring.as_raw_fd(), old_watch.data(), old_watch.event_set());
++            ops.add(new_watch)
++                .map_err(AsyncIoError::CompletionRegistration)?;
++            if let Err(err) = ops.remove(old_watch) {
++                // The new FD is still open, so both the kernel watch and the event
++                // manager dispatch entry can be removed before dropping the ring.
++                ops.remove(new_watch)
++                    .expect("failed to roll back completion ring watch");
++                return Err(AsyncIoError::CompletionRegistration(err));
++            }
++            self.completion_watch = Some(new_watch);
++        }
+ 
+         self.ring = ring;
+         self.file = file;
+@@ -405,8 +449,39 @@ impl AsyncFileEngine {
+         self.dio.map(|_| &self.file)
+     }
+ 
+-    pub fn completion_evt(&self) -> &EventFd {
+-        &self.completion_evt
++    pub fn completion_fd(&self) -> RawFd {
++        self.completion_evt
++            .as_ref()
++            .map_or_else(|| self.ring.as_raw_fd(), AsRawFd::as_raw_fd)
++    }
++
++    pub(crate) fn register_completion(
++        &mut self,
++        watch: Events,
++        ops: &mut EventOps,
++    ) -> event_manager::Result<()> {
++        match ops.add(watch) {
++            Ok(()) => self.completion_watch = Some(watch),
++            Err(event_manager::Error::FdAlreadyRegistered)
++                if self.completion_watch == Some(watch) => {}
++            Err(err) => return Err(err),
++        }
++        Ok(())
++    }
++
++    pub(crate) fn acknowledge_completion(&self, active: bool) -> Result<(), AsyncIoError> {
++        match &self.completion_evt {
++            Some(event) => event.read().map(|_| ()).map_err(AsyncIoError::EventFd),
++            None if active => self
++                .ring
++                .refresh_completions()
++                .map_err(AsyncIoError::IoUring),
++            None => Ok(()),
++        }
++    }
++
++    pub(crate) fn uses_ring_fd(&self) -> bool {
++        self.completion_evt.is_none()
+     }
+ 
+     /// The `O_DIRECT` alignment when the drive does direct I/O, else `None`.
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+index 9089af7b8..4dd81acab 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+@@ -158,11 +158,12 @@ impl FileEngine {
+         &mut self,
+         file: File,
+         dio: Option<DioAlign>,
++        completion_ops: Option<&mut event_manager::EventOps>,
+     ) -> Result<(), BlockIoError> {
+         match self {
+-            FileEngine::Async(engine) => {
+-                engine.update_file(file, dio).map_err(BlockIoError::Async)?
+-            }
++            FileEngine::Async(engine) => engine
++                .update_file(file, dio, completion_ops)
++                .map_err(BlockIoError::Async)?,
+             FileEngine::Sync(engine) => engine.update_file(file, dio),
+         };
+ 
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 62b32986c..9877ce3e6 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -276,6 +276,31 @@ impl<T: Debug> IoUring<T> {
+         Ok(submitted)
+     }
+ 
++    pub(crate) fn as_raw_fd(&self) -> RawFd {
++        self.fd.as_raw_fd()
++    }
++
++    /// Recover queued kernel work when the ring is readable but the mapped CQ is empty.
++    pub(crate) fn refresh_completions(&self) -> Result<(), IoUringError> {
++        if self.cqueue.ready().map_err(IoUringError::CQueue)? != 0 {
++            return Ok(());
++        }
++        // SAFETY: No submissions, no minimum completion count, and no signal mask.
++        SyscallReturnCode(unsafe {
++            libc::syscall(
++                libc::SYS_io_uring_enter,
++                self.fd.as_raw_fd(),
++                0u32,
++                0u32,
++                generated::IORING_ENTER_GETEVENTS,
++                std::ptr::null::<libc::sigset_t>(),
++                0usize,
++            )
++        })
++        .into_empty_result()
++        .map_err(|err| IoUringError::SQueue(SQueueError::Submit(err)))
++    }
++
+     /// Return the number of operations currently on the submission queue.
+     pub fn pending_sqes(&self) -> Result<u32, IoUringError> {
+         self.squeue.pending().map_err(IoUringError::SQueue)
+diff --git a/src/vmm/src/lib.rs b/src/vmm/src/lib.rs
+index 969ab2410..2bec2e816 100644
+--- a/src/vmm/src/lib.rs
++++ b/src/vmm/src/lib.rs
+@@ -125,7 +125,9 @@ use std::sync::{Arc, Mutex};
+ use std::time::Duration;
+ 
+ use device_manager::DeviceManager;
+-use event_manager::{EventManager as BaseEventManager, EventOps, Events, MutEventSubscriber};
++use event_manager::{
++    EventManager as BaseEventManager, EventOps, Events, MutEventSubscriber, SubscriberOps,
++};
+ use snapshot::Persist;
+ use vm_memory::GuestMemoryBackend;
+ use vmm_sys_util::epoll::EventSet;
+@@ -265,6 +267,8 @@ pub enum VmmError {
+     Kvm(#[from] vstate::kvm::KvmError),
+     /// Failed perform action on device: {0}
+     FindDeviceError(#[from] device_manager::FindDeviceError),
++    /// Failed to access the block device's event subscription: {0}
++    BlockEventSubscription(event_manager::Error),
+     /// Block: {0}
+     Block(#[from] BlockError),
+     /// Balloon: {0}
+@@ -560,10 +564,18 @@ impl Vmm {
+         &mut self,
+         drive_id: &str,
+         path_on_host: String,
++        event_manager: &mut EventManager,
+     ) -> Result<(), VmmError> {
++        let subscriber = self
++            .device_manager
++            .virtio_subscriber(VirtioDeviceType::Block, drive_id)
++            .ok_or(device_manager::FindDeviceError::DeviceNotFound)?;
++        let mut completion_ops = event_manager
++            .event_ops(subscriber)
++            .map_err(VmmError::BlockEventSubscription)?;
+         self.device_manager
+             .with_virtio_device(drive_id, |block: &mut Block| {
+-                block.update_disk_image(path_on_host)
++                block.update_disk_image(path_on_host, &mut completion_ops)
+             })??;
+         Ok(())
+     }
+diff --git a/src/vmm/src/rpc_interface.rs b/src/vmm/src/rpc_interface.rs
+index 9e8087ccb..1af53ce00 100644
+--- a/src/vmm/src/rpc_interface.rs
++++ b/src/vmm/src/rpc_interface.rs
+@@ -911,7 +911,7 @@ impl RuntimeApiController {
+                 .stop_balloon_hinting()
+                 .map(|_| VmmData::Empty)
+                 .map_err(VmmActionError::BalloonUpdate),
+-            UpdateBlockDevice(new_cfg) => self.update_block_device(new_cfg),
++            UpdateBlockDevice(new_cfg) => self.update_block_device(new_cfg, event_manager),
+             UpdateNetworkInterface(netif_update) => self.update_net_rate_limiters(netif_update),
+             UpdatePmemDevice(new_cfg) => self.update_pmem_device(new_cfg),
+             UpdateMemoryHotplugSize(cfg) => self
+@@ -1084,6 +1084,7 @@ impl RuntimeApiController {
+     fn update_block_device(
+         &mut self,
+         new_cfg: BlockDeviceUpdateConfig,
++        event_manager: &mut EventManager,
+     ) -> Result<VmmData, VmmActionError> {
+         let mut vmm = self.vmm.lock().expect("Poisoned lock");
+ 
+@@ -1095,7 +1096,7 @@ impl RuntimeApiController {
+ 
+         // virtio-block updates
+         if let Some(new_path) = new_cfg.path_on_host {
+-            vmm.update_block_device_path(&new_cfg.drive_id, new_path)
++            vmm.update_block_device_path(&new_cfg.drive_id, new_path, event_manager)
+                 .map_err(DriveError::DeviceUpdate)?;
+         }
+         if new_cfg.rate_limiter.is_some() {
+-- 
+2.43.0
+

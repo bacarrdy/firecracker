@@ -1,0 +1,211 @@
+series,round,binary,engine,profile,MBps,secs,bytes,vmm_read_requests,vmm_write_requests,max_segments,vmm_thread_cpu_ms,vmm_cpu_us_per_req,frag_mib,frag_ok,guest_rd_ios,guest_wr_ios,guest_read_requests,guest_write_requests
+300 MiB fragmentation setup,1,fleet,Sync,w1m,3.2,98.3751,314572800,0,34219,1,3643.6,106.48,300,False,0,76800,,
+300 MiB fragmentation setup,1,fleet,Sync,w4k,2.41,5.0926,12288000,0,3000,1,358.7,119.58,300,False,0,6000,,
+300 MiB fragmentation setup,1,fleet,Sync,w4kqd4,2.84,8.66027,24576000,0,6000,1,429.4,71.57,300,False,0,12000,,
+300 MiB fragmentation setup,1,fleet,Sync,r4k,114.44,2.34567,268435456,53650,0,1,1152.4,21.48,300,False,65536,0,,
+300 MiB fragmentation setup,1,fleet,Sync,r4kqd4,165.13,1.62557,268435456,65536,0,1,771.8,11.78,300,False,65536,0,,
+300 MiB fragmentation setup,1,segmax3,Sync,w1m,434.68,0.723688,314572800,0,1200,64,484.6,403.84,300,False,0,1200,,
+300 MiB fragmentation setup,1,segmax3,Sync,w4k,2.75,4.46417,12288000,0,3000,64,356.5,118.84,300,False,0,6000,,
+300 MiB fragmentation setup,1,segmax3,Sync,w4kqd4,3.58,6.86967,24576000,0,6000,64,416.6,69.44,300,False,0,12000,,
+300 MiB fragmentation setup,1,segmax3,Sync,r4k,110.63,2.42649,268435456,65536,0,64,1182.0,18.04,300,False,65536,0,,
+300 MiB fragmentation setup,1,segmax3,Sync,r4kqd4,150.47,1.78397,268435456,65536,0,64,789.9,12.05,300,False,65536,0,,
+300 MiB fragmentation setup,1,patched,Sync,w1m,368.61,0.853402,314572800,0,2400,32,527.6,219.85,300,False,0,2400,,
+300 MiB fragmentation setup,1,patched,Sync,w4k,2.77,4.442,12288000,0,3000,32,345.4,115.14,300,False,0,6000,,
+300 MiB fragmentation setup,1,patched,Sync,w4kqd4,2.74,8.95368,24576000,0,6000,32,415.1,69.19,300,False,0,12000,,
+300 MiB fragmentation setup,1,patched,Sync,r4k,108.97,2.46333,268435456,65536,0,32,1180.1,18.01,300,False,65536,0,,
+300 MiB fragmentation setup,1,patched,Sync,r4kqd4,192.09,1.39744,268435456,65536,0,32,680.5,10.38,300,False,65536,0,,
+300 MiB fragmentation setup,1,fleet,Async,w1m,99.52,3.16079,314572800,0,76800,1,5170.7,67.33,300,False,0,76800,,
+300 MiB fragmentation setup,1,fleet,Async,w4k,2.63,4.66679,12288000,0,3000,1,-3705.6,-1235.19,300,False,0,6000,,
+300 MiB fragmentation setup,1,fleet,Async,w4kqd4,5.56,4.42109,24576000,0,6000,1,559.1,93.18,300,False,0,12000,,
+300 MiB fragmentation setup,1,fleet,Async,r4k,101.56,2.64311,268435456,65536,0,1,1371.0,20.92,300,False,65536,0,,
+300 MiB fragmentation setup,1,fleet,Async,r4kqd4,215.14,1.24775,268435456,65536,0,1,911.5,13.91,300,False,65536,0,,
+300 MiB fragmentation setup,1,segmax3,Async,w1m,492.61,0.63858,314572800,0,1200,64,618.0,515.02,300,False,0,1200,,
+300 MiB fragmentation setup,1,segmax3,Async,w4k,2.66,4.62236,12288000,0,3000,64,473.7,157.9,300,False,0,6000,,
+300 MiB fragmentation setup,1,segmax3,Async,w4kqd4,4.94,4.97636,24576000,0,6000,64,366.4,61.06,300,False,0,12000,,
+300 MiB fragmentation setup,1,segmax3,Async,r4k,98.12,2.73588,268435456,65536,0,64,1481.4,22.6,300,False,65536,0,,
+300 MiB fragmentation setup,1,segmax3,Async,r4kqd4,189.14,1.41925,268435456,65536,0,64,1029.6,15.71,300,False,65536,0,,
+300 MiB fragmentation setup,1,patched,Async,w1m,434.91,0.723299,314572800,0,2400,32,862.4,359.32,300,False,0,2400,,
+300 MiB fragmentation setup,1,patched,Async,w4k,2.73,4.50601,12288000,0,3000,32,141.1,47.04,300,False,0,6000,,
+300 MiB fragmentation setup,1,patched,Async,w4kqd4,4.84,5.08209,24576000,0,6000,32,376.9,62.81,300,False,0,12000,,
+300 MiB fragmentation setup,1,patched,Async,r4k,102.57,2.61697,268435456,65536,0,32,1477.0,22.54,300,False,65536,0,,
+300 MiB fragmentation setup,1,patched,Async,r4kqd4,170.71,1.5725,268435456,65536,0,32,1079.8,16.48,300,False,65536,0,,
+300 MiB fragmentation setup,2,segmax3,Sync,w1m,443.12,0.709901,314572800,65536,0,64,459.4,7.01,300,False,0,1200,,
+300 MiB fragmentation setup,2,segmax3,Sync,w4k,2.84,4.32186,12288000,65536,0,64,347.0,5.29,300,False,0,6000,,
+300 MiB fragmentation setup,2,segmax3,Sync,w4kqd4,3.59,6.84266,24576000,65536,0,64,412.7,6.3,300,False,0,12000,,
+300 MiB fragmentation setup,2,segmax3,Sync,r4k,108.93,2.4642,268435456,65536,0,64,1184.7,18.08,300,False,65536,0,,
+300 MiB fragmentation setup,2,segmax3,Sync,r4kqd4,166.77,1.60966,268435456,0,0,64,822.6,822570.49,300,False,65536,0,,
+300 MiB fragmentation setup,2,patched,Sync,w1m,364.03,0.864139,314572800,65536,0,32,526.6,8.04,300,False,0,2400,,
+300 MiB fragmentation setup,2,patched,Sync,w4k,2.91,4.21865,12288000,65536,0,32,349.1,5.33,300,False,0,6000,,
+300 MiB fragmentation setup,2,patched,Sync,w4kqd4,2.82,8.72644,24576000,65536,0,32,409.9,6.25,300,False,0,12000,,
+300 MiB fragmentation setup,2,patched,Sync,r4k,112.66,2.38275,268435456,65536,0,32,1148.0,17.52,300,False,65536,0,,
+300 MiB fragmentation setup,2,patched,Sync,r4kqd4,173.1,1.55075,268435456,0,0,32,762.8,762814.14,300,False,65536,0,,
+300 MiB fragmentation setup,2,fleet,Async,w1m,98.67,3.188,314572800,65536,0,1,5224.0,79.71,300,False,0,76800,,
+300 MiB fragmentation setup,2,fleet,Async,w4k,2.67,4.60918,12288000,65536,0,1,-3727.0,-56.87,300,False,0,6000,,
+300 MiB fragmentation setup,2,fleet,Async,w4kqd4,5.26,4.66831,24576000,65536,0,1,551.8,8.42,300,False,0,12000,,
+300 MiB fragmentation setup,2,fleet,Async,r4k,112.04,2.39592,268435456,65536,0,1,1315.8,20.08,300,False,65536,0,,
+300 MiB fragmentation setup,2,fleet,Async,r4kqd4,181.41,1.47972,268435456,0,0,1,977.8,977767.73,300,False,65536,0,,
+300 MiB fragmentation setup,2,segmax3,Async,w1m,501.64,0.627089,314572800,65536,0,64,593.8,9.06,300,False,0,1200,,
+300 MiB fragmentation setup,2,segmax3,Async,w4k,2.72,4.51194,12288000,65536,0,64,467.6,7.13,300,False,0,6000,,
+300 MiB fragmentation setup,2,segmax3,Async,w4kqd4,5.82,4.22009,24576000,65536,0,64,314.6,4.8,300,False,0,12000,,
+300 MiB fragmentation setup,2,segmax3,Async,r4k,99.24,2.70492,268435456,65536,0,64,1453.9,22.18,300,False,65536,0,,
+300 MiB fragmentation setup,2,segmax3,Async,r4kqd4,171.11,1.56875,268435456,0,0,64,1080.7,1080695.87,300,False,65536,0,,
+300 MiB fragmentation setup,2,patched,Async,w1m,432.86,0.726738,314572800,65536,0,32,913.0,13.93,300,False,0,2400,,
+300 MiB fragmentation setup,2,patched,Async,w4k,2.9,4.23637,12288000,65536,0,32,102.7,1.57,300,False,0,6000,,
+300 MiB fragmentation setup,2,patched,Async,w4kqd4,5.43,4.52788,24576000,65536,0,32,512.6,7.82,300,False,0,12000,,
+300 MiB fragmentation setup,2,patched,Async,r4k,99.75,2.69101,268435456,65536,0,32,1473.0,22.48,300,False,65536,0,,
+300 MiB fragmentation setup,2,patched,Async,r4kqd4,174.55,1.5379,268435456,0,0,32,1056.2,1056216.19,300,False,65536,0,,
+300 MiB fragmentation setup,2,fleet,Sync,w1m,39.43,7.97886,314572800,65536,0,1,1964.7,29.98,300,False,0,76800,,
+300 MiB fragmentation setup,2,fleet,Sync,w4k,2.91,4.22693,12288000,65536,0,1,328.3,5.01,300,False,0,6000,,
+300 MiB fragmentation setup,2,fleet,Sync,w4kqd4,2.75,8.93348,24576000,65536,0,1,433.8,6.62,300,False,0,12000,,
+300 MiB fragmentation setup,2,fleet,Sync,r4k,113.04,2.3746,268435456,65536,0,1,1116.0,17.03,300,False,65536,0,,
+300 MiB fragmentation setup,2,fleet,Sync,r4kqd4,190.74,1.40737,268435456,65536,0,1,661.5,10.09,300,False,65536,0,,
+300 MiB fragmentation setup,3,patched,Sync,w1m,382.51,0.822399,314572800,0,0,32,513.9,513919.87,300,False,0,2400,,
+300 MiB fragmentation setup,3,patched,Sync,w4k,2.76,4.44463,12288000,0,0,32,353.6,353613.17,300,False,0,6000,,
+300 MiB fragmentation setup,3,patched,Sync,w4kqd4,2.79,8.80085,24576000,0,0,32,376.5,376498.9,300,False,0,12000,,
+300 MiB fragmentation setup,3,patched,Sync,r4k,115.21,2.32995,268435456,0,0,32,1116.1,1116092.15,300,False,65536,0,,
+300 MiB fragmentation setup,3,patched,Sync,r4kqd4,162.25,1.65447,268435456,0,0,32,865.0,865044.81,300,False,65536,0,,
+300 MiB fragmentation setup,3,fleet,Async,w1m,97.8,3.21661,314572800,0,0,1,5140.3,5140332.12,300,False,0,76800,,
+300 MiB fragmentation setup,3,fleet,Async,w4k,2.76,4.44844,12288000,0,0,1,-3644.2,-3644158.85,300,False,0,6000,,
+300 MiB fragmentation setup,3,fleet,Async,w4kqd4,5.27,4.66278,24576000,0,0,1,549.8,549795.09,300,False,0,12000,,
+300 MiB fragmentation setup,3,fleet,Async,r4k,105.19,2.55193,268435456,0,0,1,1346.8,1346847.84,300,False,65536,0,,
+300 MiB fragmentation setup,3,fleet,Async,r4kqd4,179.13,1.49857,268435456,0,0,1,1023.6,1023583.84,300,False,65536,0,,
+300 MiB fragmentation setup,3,segmax3,Async,w1m,501.47,0.627297,314572800,0,0,64,620.5,620509.77,300,False,0,1200,,
+300 MiB fragmentation setup,3,segmax3,Async,w4k,2.68,4.58803,12288000,0,0,64,415.4,415406.0,300,False,0,6000,,
+300 MiB fragmentation setup,3,segmax3,Async,w4kqd4,5.04,4.87704,24576000,0,0,64,381.5,381473.03,300,False,0,12000,,
+300 MiB fragmentation setup,3,segmax3,Async,r4k,97.81,2.74454,268435456,0,0,64,1486.3,1486348.77,300,False,65536,0,,
+300 MiB fragmentation setup,3,segmax3,Async,r4kqd4,182.19,1.47338,268435456,0,0,64,1074.6,1074591.33,300,False,65536,0,,
+300 MiB fragmentation setup,3,patched,Async,w1m,406.44,0.773966,314572800,0,0,32,970.1,970088.41,300,False,0,2400,,
+300 MiB fragmentation setup,3,patched,Async,w4k,2.72,4.51463,12288000,0,0,32,148.1,148122.22,300,False,0,6000,,
+300 MiB fragmentation setup,3,patched,Async,w4kqd4,4.64,5.3,24576000,0,0,32,351.3,351262.49,300,False,0,12000,,
+300 MiB fragmentation setup,3,patched,Async,r4k,97.51,2.75295,268435456,0,0,32,1483.3,1483284.7,300,False,65536,0,,
+300 MiB fragmentation setup,3,patched,Async,r4kqd4,184.34,1.45619,268435456,0,0,32,1057.1,1057102.99,300,False,65536,0,,
+300 MiB fragmentation setup,3,fleet,Sync,w1m,40.85,7.69977,314572800,65536,0,1,1927.8,29.42,300,False,0,76800,,
+300 MiB fragmentation setup,3,fleet,Sync,w4k,2.88,4.26701,12288000,65536,0,1,324.4,4.95,300,False,0,6000,,
+300 MiB fragmentation setup,3,fleet,Sync,w4kqd4,3.61,6.80445,24576000,65536,0,1,422.6,6.45,300,False,0,12000,,
+300 MiB fragmentation setup,3,fleet,Sync,r4k,116.72,2.29987,268435456,65536,0,1,1061.6,16.2,300,False,65536,0,,
+300 MiB fragmentation setup,3,fleet,Sync,r4kqd4,174.52,1.53811,268435456,65536,0,1,731.7,11.17,300,False,65536,0,,
+300 MiB fragmentation setup,3,segmax3,Sync,w1m,432.03,0.728129,314572800,0,0,64,483.9,483925.17,300,False,0,1200,,
+300 MiB fragmentation setup,3,segmax3,Sync,w4k,2.77,4.43184,12288000,0,0,64,336.1,336142.14,300,False,0,6000,,
+300 MiB fragmentation setup,3,segmax3,Sync,w4kqd4,2.78,8.8344,24576000,0,0,64,428.0,428008.18,300,False,0,12000,,
+300 MiB fragmentation setup,3,segmax3,Sync,r4k,109.74,2.4462,268435456,0,0,64,1165.2,1165242.63,300,False,65536,0,,
+300 MiB fragmentation setup,3,segmax3,Sync,r4kqd4,171.82,1.56228,268435456,0,0,64,749.0,748998.67,300,False,65536,0,,
+400 MiB fragmentation setup,1,fleet,Sync,w1m,137.84,2.28221,314572800,,,1,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,1,fleet,Sync,w4k,2.73,4.50336,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,1,fleet,Sync,w4kqd4,4.93,4.98124,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,1,fleet,Sync,r4k,114.95,2.33532,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,fleet,Sync,r4kqd4,161.31,1.66411,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,patched,Sync,w1m,486.5,0.646606,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,1,patched,Sync,w4k,2.85,4.31289,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,1,patched,Sync,w4kqd4,2.96,8.2934,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,1,patched,Sync,r4k,110.45,2.43044,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,patched,Sync,r4kqd4,181.82,1.47637,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,fleet,Async,w1m,531.54,0.591816,314572800,,,1,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,1,fleet,Async,w4k,2.74,4.49017,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,1,fleet,Async,w4kqd4,5.96,4.12501,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,1,fleet,Async,r4k,104.01,2.58079,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,fleet,Async,r4kqd4,182.96,1.4672,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,patched,Async,w1m,516.81,0.608677,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,1,patched,Async,w4k,2.69,4.56217,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,1,patched,Async,w4kqd4,5.72,4.29643,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,1,patched,Async,r4k,102.96,2.60721,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,1,patched,Async,r4kqd4,168.59,1.59224,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,patched,Sync,w1m,531.02,0.592393,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,2,patched,Sync,w4k,2.84,4.31994,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,2,patched,Sync,w4kqd4,2.78,8.84542,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,2,patched,Sync,r4k,104.93,2.55813,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,patched,Sync,r4kqd4,158.29,1.69582,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,fleet,Async,w1m,483.04,0.651239,314572800,,,1,0.0,0.0,400,,,,0,600
+400 MiB fragmentation setup,2,fleet,Async,w4k,2.63,4.6774,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,2,fleet,Async,w4kqd4,6.29,3.90961,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,2,fleet,Async,r4k,102.56,2.61745,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,fleet,Async,r4kqd4,177.96,1.50843,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,patched,Async,w1m,483.19,0.65104,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,2,patched,Async,w4k,2.66,4.62484,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,2,patched,Async,w4kqd4,4.97,4.94257,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,2,patched,Async,r4k,94.17,2.85045,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,patched,Async,r4kqd4,168.84,1.58985,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,fleet,Sync,w1m,490.11,0.641839,314572800,,,1,0.0,0.0,400,,,,0,600
+400 MiB fragmentation setup,2,fleet,Sync,w4k,2.74,4.4864,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,2,fleet,Sync,w4kqd4,2.93,8.3777,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,2,fleet,Sync,r4k,117.87,2.27738,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,2,fleet,Sync,r4kqd4,175.42,1.53022,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,fleet,Async,w1m,458.52,0.686059,314572800,,,1,0.0,0.0,400,,,,0,600
+400 MiB fragmentation setup,3,fleet,Async,w4k,2.46,5.00405,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,3,fleet,Async,w4kqd4,6.62,3.71148,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,3,fleet,Async,r4k,105.68,2.53996,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,fleet,Async,r4kqd4,185.53,1.44689,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,patched,Async,w1m,579.2,0.543119,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,3,patched,Async,w4k,2.7,4.55566,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,3,patched,Async,w4kqd4,5.51,4.45748,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,3,patched,Async,r4k,97.46,2.75425,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,patched,Async,r4kqd4,164.79,1.62892,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,fleet,Sync,w1m,467.23,0.673272,314572800,,,1,0.0,0.0,400,,,,0,600
+400 MiB fragmentation setup,3,fleet,Sync,w4k,2.74,4.48362,12288000,,,1,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,3,fleet,Sync,w4kqd4,2.97,8.28582,24576000,,,1,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,3,fleet,Sync,r4k,113.28,2.36971,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,fleet,Sync,r4kqd4,190.75,1.40725,268435456,,,1,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,patched,Sync,w1m,513.65,0.612426,314572800,,,64,0.0,0.0,400,,,,0,300
+400 MiB fragmentation setup,3,patched,Sync,w4k,2.89,4.2592,12288000,,,64,0.0,0.0,400,,,,0,6000
+400 MiB fragmentation setup,3,patched,Sync,w4kqd4,2.92,8.42526,24576000,,,64,0.0,0.0,400,,,,0,12000
+400 MiB fragmentation setup,3,patched,Sync,r4k,119.69,2.24272,268435456,,,64,0.0,0.0,400,,,,65536,0
+400 MiB fragmentation setup,3,patched,Sync,r4kqd4,166.02,1.61686,268435456,,,64,0.0,0.0,400,,,,65536,0
+Fresh guest,1,fleet,Sync,w1m,134.02,2.34728,314572800,,,1,,,,,,,0,300
+Fresh guest,1,fleet,Sync,w4k,2.83,4.34807,12288000,,,1,,,,,,,0,6000
+Fresh guest,1,fleet,Sync,w4kqd4,3.61,6.81511,24576000,,,1,,,,,,,0,12000
+Fresh guest,1,fleet,Sync,r4k,116.81,2.29797,268435456,,,1,,,,,,,65536,0
+Fresh guest,1,fleet,Sync,r4kqd4,178.41,1.50456,268435456,,,1,,,,,,,65536,0
+Fresh guest,1,patched,Sync,w1m,432.81,0.726818,314572800,,,64,,,,,,,0,300
+Fresh guest,1,patched,Sync,w4k,2.73,4.50875,12288000,,,64,,,,,,,0,6000
+Fresh guest,1,patched,Sync,w4kqd4,3.0,8.18598,24576000,,,64,,,,,,,0,12000
+Fresh guest,1,patched,Sync,r4k,112.06,2.39549,268435456,,,64,,,,,,,65536,0
+Fresh guest,1,patched,Sync,r4kqd4,158.87,1.68961,268435456,,,64,,,,,,,65536,0
+Fresh guest,1,fleet,Async,w1m,526.74,0.597203,314572800,,,1,,,,,,,0,300
+Fresh guest,1,fleet,Async,w4k,2.73,4.50636,12288000,,,1,,,,,,,0,6000
+Fresh guest,1,fleet,Async,w4kqd4,5.92,4.14832,24576000,,,1,,,,,,,0,12000
+Fresh guest,1,fleet,Async,r4k,105.44,2.54574,268435456,,,1,,,,,,,65536,0
+Fresh guest,1,fleet,Async,r4kqd4,217.62,1.23353,268435456,,,1,,,,,,,65536,0
+Fresh guest,1,patched,Async,w1m,466.36,0.674527,314572800,,,64,,,,,,,0,300
+Fresh guest,1,patched,Async,w4k,2.53,4.8551,12288000,,,64,,,,,,,0,6000
+Fresh guest,1,patched,Async,w4kqd4,4.69,5.23682,24576000,,,64,,,,,,,0,12000
+Fresh guest,1,patched,Async,r4k,101.22,2.6519,268435456,,,64,,,,,,,65536,0
+Fresh guest,1,patched,Async,r4kqd4,176.02,1.52503,268435456,,,64,,,,,,,65536,0
+Fresh guest,2,patched,Sync,w1m,626.41,0.502182,314572800,,,64,,,,,,,0,300
+Fresh guest,2,patched,Sync,w4k,2.73,4.50773,12288000,,,64,,,,,,,0,6000
+Fresh guest,2,patched,Sync,w4kqd4,2.85,8.61009,24576000,,,64,,,,,,,0,12000
+Fresh guest,2,patched,Sync,r4k,110.03,2.43972,268435456,,,64,,,,,,,65536,0
+Fresh guest,2,patched,Sync,r4kqd4,166.4,1.61324,268435456,,,64,,,,,,,65536,0
+Fresh guest,2,fleet,Async,w1m,487.15,0.645742,314572800,,,1,,,,,,,0,300
+Fresh guest,2,fleet,Async,w4k,2.62,4.69182,12288000,,,1,,,,,,,0,6000
+Fresh guest,2,fleet,Async,w4kqd4,4.89,5.02126,24576000,,,1,,,,,,,0,12000
+Fresh guest,2,fleet,Async,r4k,101.97,2.63257,268435456,,,1,,,,,,,65536,0
+Fresh guest,2,fleet,Async,r4kqd4,232.1,1.15655,268435456,,,1,,,,,,,65536,0
+Fresh guest,2,patched,Async,w1m,486.66,0.646386,314572800,,,64,,,,,,,0,300
+Fresh guest,2,patched,Async,w4k,2.57,4.78662,12288000,,,64,,,,,,,0,6000
+Fresh guest,2,patched,Async,w4kqd4,4.79,5.13485,24576000,,,64,,,,,,,0,12000
+Fresh guest,2,patched,Async,r4k,96.93,2.76925,268435456,,,64,,,,,,,65536,0
+Fresh guest,2,patched,Async,r4kqd4,191.12,1.40454,268435456,,,64,,,,,,,65536,0
+Fresh guest,2,fleet,Sync,w1m,472.14,0.666267,314572800,,,1,,,,,,,0,600
+Fresh guest,2,fleet,Sync,w4k,2.91,4.22222,12288000,,,1,,,,,,,0,6000
+Fresh guest,2,fleet,Sync,w4kqd4,3.51,6.9926,24576000,,,1,,,,,,,0,12000
+Fresh guest,2,fleet,Sync,r4k,119.82,2.24026,268435456,,,1,,,,,,,65536,0
+Fresh guest,2,fleet,Sync,r4kqd4,176.08,1.52454,268435456,,,1,,,,,,,65536,0
+Fresh guest,3,fleet,Async,w1m,500.07,0.629055,314572800,,,1,,,,,,,0,300
+Fresh guest,3,fleet,Async,w4k,2.57,4.7893,12288000,,,1,,,,,,,0,6000
+Fresh guest,3,fleet,Async,w4kqd4,5.25,4.67877,24576000,,,1,,,,,,,0,12000
+Fresh guest,3,fleet,Async,r4k,104.72,2.56329,268435456,,,1,,,,,,,65536,0
+Fresh guest,3,fleet,Async,r4kqd4,185.26,1.44893,268435456,,,1,,,,,,,65536,0
+Fresh guest,3,patched,Async,w1m,481.08,0.653885,314572800,,,64,,,,,,,0,300
+Fresh guest,3,patched,Async,w4k,2.64,4.65493,12288000,,,64,,,,,,,0,6000
+Fresh guest,3,patched,Async,w4kqd4,5.19,4.73597,24576000,,,64,,,,,,,0,12000
+Fresh guest,3,patched,Async,r4k,94.47,2.84158,268435456,,,64,,,,,,,65536,0
+Fresh guest,3,patched,Async,r4kqd4,173.59,1.54638,268435456,,,64,,,,,,,65536,0
+Fresh guest,3,fleet,Sync,w1m,506.95,0.620516,314572800,,,1,,,,,,,0,300
+Fresh guest,3,fleet,Sync,w4k,2.83,4.34369,12288000,,,1,,,,,,,0,6000
+Fresh guest,3,fleet,Sync,w4kqd4,2.84,8.63955,24576000,,,1,,,,,,,0,12000
+Fresh guest,3,fleet,Sync,r4k,119.59,2.24457,268435456,,,1,,,,,,,65536,0
+Fresh guest,3,fleet,Sync,r4kqd4,166.13,1.6158,268435456,,,1,,,,,,,65536,0
+Fresh guest,3,patched,Sync,w1m,516.38,0.609188,314572800,,,64,,,,,,,0,300
+Fresh guest,3,patched,Sync,w4k,2.69,4.56856,12288000,,,64,,,,,,,0,6000
+Fresh guest,3,patched,Sync,w4kqd4,2.82,8.70639,24576000,,,64,,,,,,,0,12000
+Fresh guest,3,patched,Sync,r4k,113.79,2.35902,268435456,,,64,,,,,,,65536,0
+Fresh guest,3,patched,Sync,r4kqd4,158.88,1.68957,268435456,,,64,,,,,,,65536,0

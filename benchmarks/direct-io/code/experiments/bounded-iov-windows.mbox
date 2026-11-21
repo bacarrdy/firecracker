@@ -1,0 +1,260 @@
+From 9cc44fcaea5ac737ba852794c4a4197017a44020 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 11:38:42 +0200
+Subject: [PATCH 1/2] virtio-blk: use the request iovecs directly for complete
+ I/O windows
+
+Keep the guest mapping and the vector that describes it owned by the request until completion. Only allocate scratch space when the byte limit cuts through an iovec. Sync and Async use the same window boundaries and short completion handling.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ .../virtio/block/virtio/io/async_io.rs        | 28 +++----
+ .../src/devices/virtio/block/virtio/io/mod.rs | 77 +++++++++++++------
+ .../devices/virtio/block/virtio/io/sync_io.rs |  9 +--
+ 3 files changed, 71 insertions(+), 43 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index 6de99f4ef..836e90641 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -16,9 +16,7 @@ use vmm_sys_util::eventfd::EventFd;
+ use crate::devices::virtio::block::virtio::io::direct::{
+     Bounce, BounceBuf, BouncePlan, DioAlign, Wait, bounce_buf,
+ };
+-use crate::devices::virtio::block::virtio::io::{
+-    RequestError, io_window_with_limit, segment_iovecs,
+-};
++use crate::devices::virtio::block::virtio::io::{RequestError, io_window, segment_iovecs};
+ use crate::devices::virtio::block::virtio::request::DataSegment;
+ use crate::devices::virtio::block::virtio::{IO_URING_NUM_ENTRIES, PendingRequest};
+ use crate::io_uring::operation::{Cqe, OpCode, Operation};
+@@ -207,24 +205,27 @@ impl GuestOp {
+                 false,
+             )
+         } else {
+-            t.window_bytes = io_window_with_limit(&t.remaining, &mut t.window, t.window_limit);
++            // Both possible slices are backed by request-owned Vecs. Moving the request
++            // into the ring leaves their allocations in place until the CQE is consumed.
++            let (window, bytes) = io_window(&t.remaining, &mut t.window, t.window_limit);
++            t.window_bytes = bytes;
+             if let Some(dio) = t.dio
+-                && !dio.eligible_iovecs(&t.window, offset)
++                && !dio.eligible_iovecs(window, offset)
+             {
+                 return Err(self);
+             }
+-            if t.window.is_empty() {
++            if window.is_empty() {
+                 (0, 0, false)
+-            } else if t.window.len() == 1 {
++            } else if window.len() == 1 {
+                 (
+-                    t.window[0].iov_base as usize,
++                    window[0].iov_base as usize,
+                     u32::try_from(t.window_bytes).expect("window is bounded by MAX_IO_BYTES"),
+                     false,
+                 )
+             } else {
+                 (
+-                    t.window.as_ptr() as usize,
+-                    u32::try_from(t.window.len()).expect("window is bounded by MAX_IOVECS"),
++                    window.as_ptr() as usize,
++                    u32::try_from(window.len()).expect("window is bounded by MAX_IOVECS"),
+                     true,
+                 )
+             }
+@@ -738,7 +739,6 @@ impl AsyncFileEngine {
+             Err(error) => return Err(RequestError { req, error }),
+         };
+         let len: u64 = remaining.iter().map(|iov| iov.iov_len as u64).sum();
+-        let capacity = remaining.len().min(super::MAX_IOVECS);
+         let op = GuestOp {
+             req,
+             transfer: Some(Transfer {
+@@ -747,7 +747,7 @@ impl AsyncFileEngine {
+                 dirty_scalar: None,
+                 scalar: None,
+                 remaining,
+-                window: Vec::with_capacity(capacity),
++                window: Vec::new(),
+                 window_bytes: 0,
+                 window_limit: self.window_limit(),
+                 offset,
+@@ -1004,12 +1004,12 @@ impl AsyncFileEngine {
+                         u32::try_from(bytes).expect("window is bounded by MAX_IO_BYTES"),
+                     )
+                 } else {
+-                    let bytes = io_window_with_limit(
++                    let (window, bytes) = io_window(
+                         &transfer.remaining,
+                         &mut transfer.window,
+                         transfer.window_limit,
+                     );
+-                    bytes != 0 && dio.eligible_iovecs(&transfer.window, offset)
++                    bytes != 0 && dio.eligible_iovecs(window, offset)
+                 };
+                 if !eligible {
+                     return Ok(Some(
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+index 9089af7b8..f81521289 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+@@ -24,33 +24,32 @@ use crate::vstate::memory::{GuestAddress, GuestMemoryMmap};
+ const MAX_IO_BYTES: usize = 0x7fff_0000;
+ const MAX_IOVECS: usize = 1024;
+ 
+-/// Make a bounded host operation from the remaining raw guest-memory ranges.
+-fn io_window(iovecs: &[libc::iovec], window: &mut Vec<libc::iovec>) -> usize {
+-    io_window_with_limit(iovecs, window, MAX_IO_BYTES)
+-}
+-
+-fn io_window_with_limit(
+-    iovecs: &[libc::iovec],
+-    window: &mut Vec<libc::iovec>,
++/// Borrow the complete iovecs that fit in one host I/O. A cut in the middle of a
++/// segment needs a shortened final iovec, so only that case uses scratch storage.
++fn io_window<'a>(
++    iovecs: &'a [libc::iovec],
++    scratch: &'a mut Vec<libc::iovec>,
+     limit: usize,
+-) -> usize {
+-    window.clear();
++) -> (&'a [libc::iovec], usize) {
++    let iovecs = &iovecs[..iovecs.len().min(MAX_IOVECS)];
+     let mut bytes = 0;
+-    for iov in iovecs.iter().take(MAX_IOVECS) {
+-        let len = iov.iov_len.min(limit - bytes);
+-        if len == 0 {
+-            break;
++    for (index, iov) in iovecs.iter().enumerate() {
++        let available = limit - bytes;
++        if available == 0 || iov.iov_len == 0 {
++            return (&iovecs[..index], bytes);
+         }
+-        window.push(libc::iovec {
+-            iov_base: iov.iov_base,
+-            iov_len: len,
+-        });
+-        bytes += len;
+-        if bytes == limit {
+-            break;
++        if iov.iov_len > available {
++            scratch.clear();
++            scratch.extend_from_slice(&iovecs[..index]);
++            scratch.push(libc::iovec {
++                iov_base: iov.iov_base,
++                iov_len: available,
++            });
++            return (scratch, limit);
+         }
++        bytes += iov.iov_len;
+     }
+-    bytes
++    (iovecs, bytes)
+ }
+ 
+ /// The host iovecs of a request's data segments. Fails if a segment is not inside guest memory
+@@ -772,6 +771,40 @@ pub mod tests {
+         assert!(!D4K.eligible_iovecs(&[iov(0x1000, 0)], 0));
+     }
+ 
++    #[test]
++    fn test_whole_iovecs_are_borrowed_and_only_split_lengths_are_copied() {
++        let entry = |len| libc::iovec {
++            iov_base: std::ptr::null_mut(),
++            iov_len: len,
++        };
++        let spans = [entry(16), entry(64), entry(8)];
++        let mut scratch = Vec::new();
++        for (limit, expected_count, expected_bytes) in [(0, 0, 0), (16, 1, 16), (88, 3, 88)] {
++            let (window, bytes) = io_window(&spans, &mut scratch, limit);
++            assert_eq!(
++                (window.as_ptr(), window.len(), bytes),
++                (spans.as_ptr(), expected_count, expected_bytes)
++            );
++        }
++        assert_eq!(scratch.capacity(), 0);
++        let (window, bytes) = io_window(&spans, &mut scratch, 32);
++        assert_eq!((window.len(), window[1].iov_len, bytes), (2, 16, 32));
++        assert_ne!(window.as_ptr(), spans.as_ptr());
++        assert_eq!(spans[1].iov_len, 64);
++        let many = vec![entry(1); MAX_IOVECS + 1];
++        let (window, bytes) = io_window(&many, &mut scratch, MAX_IO_BYTES);
++        assert_eq!(
++            (window.as_ptr(), window.len(), bytes),
++            (many.as_ptr(), MAX_IOVECS, MAX_IOVECS)
++        );
++        let with_zero = [entry(1), entry(0), entry(1)];
++        let (window, bytes) = io_window(&with_zero, &mut scratch, MAX_IO_BYTES);
++        assert_eq!(
++            (window.as_ptr(), window.len(), bytes),
++            (with_zero.as_ptr(), 1, 1)
++        );
++    }
++
+     #[test]
+     fn test_advance_iovecs() {
+         let mut buf = [0u8; 64];
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
+index 0e6c5824d..16702c508 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/sync_io.rs
+@@ -82,11 +82,7 @@ where
+     F: FnMut(&[libc::iovec], usize, i64) -> Result<usize, std::io::Error>,
+ {
+     let mut total = 0u32;
+-    let mut window = if iovecs.len() > 1 {
+-        Vec::with_capacity(iovecs.len().min(super::MAX_IOVECS))
+-    } else {
+-        Vec::new()
+-    };
++    let mut window = Vec::new();
+     let mut index = 0;
+     while index < iovecs.len() {
+         let remaining = &iovecs[index..];
+@@ -99,8 +95,7 @@ where
+             };
+             (std::slice::from_ref(&single), len)
+         } else {
+-            let bytes = io_window(remaining, &mut window);
+-            (window.as_slice(), bytes)
++            io_window(remaining, &mut window, super::MAX_IO_BYTES)
+         };
+         let pos = offset
+             .checked_add(u64::from(total))
+-- 
+2.43.0
+
+
+From fb05cd7fa0de260943183af6cdc9e28fb7e8287b Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 11:42:48 +0200
+Subject: [PATCH 2/2] virtio-blk: build a clipped iovec window in one
+ allocation
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/vmm/src/devices/virtio/block/virtio/io/mod.rs | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+index f81521289..e102c154e 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+@@ -40,11 +40,8 @@ fn io_window<'a>(
+         }
+         if iov.iov_len > available {
+             scratch.clear();
+-            scratch.extend_from_slice(&iovecs[..index]);
+-            scratch.push(libc::iovec {
+-                iov_base: iov.iov_base,
+-                iov_len: available,
+-            });
++            scratch.extend_from_slice(&iovecs[..=index]);
++            scratch[index].iov_len = available;
+             return (scratch, limit);
+         }
+         bytes += iov.iov_len;
+-- 
+2.43.0
+

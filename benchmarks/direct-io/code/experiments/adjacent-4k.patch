@@ -1,0 +1,767 @@
+diff --git a/src/vmm/src/devices/virtio/block/virtio/device.rs b/src/vmm/src/devices/virtio/block/virtio/device.rs
+index f59bc4e..0f4d847 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/device.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/device.rs
+@@ -709,6 +709,12 @@ impl VirtioBlock {
+ 
+         let queue = &mut self.queues[queue_index];
+         let mut used_any = false;
++        // A hint lasts only for contiguous accepted reads in this queue drain.
++        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++        let small_pairs = *ENABLED.get_or_init(|| {
++            std::env::var_os("FC_QA_SMALL_READ_PAIR").as_deref() == Some(std::ffi::OsStr::new("1"))
++        });
++        let mut next_offset = None;
+ 
+         while let Some(head) = queue.pop_or_enable_notification()? {
+             self.metrics.remaining_reqs_count.add(queue.len().into());
+@@ -718,6 +724,18 @@ impl VirtioBlock {
+                         // Admission must precede rate accounting: a request that is put back
+                         // on the queue must not consume tokens, including burst or debt.
+                         if let FileEngine::Async(engine) = &mut self.disk.file_engine {
++                            // A failed pair may replay both reads. Keep later modifications
++                            // and flushes behind them until both original reads retire.
++                            if engine.has_paired_reads()
++                                && matches!(
++                                    request.r#type,
++                                    RequestType::Out | RequestType::Discard | RequestType::Flush
++                                )
++                            {
++                                queue.undo_pop();
++                                self.is_io_engine_throttled = true;
++                                break;
++                            }
+                             match engine.can_accept() {
+                                 Ok(true) => (),
+                                 Ok(false) => {
+@@ -735,7 +753,7 @@ impl VirtioBlock {
+                             }
+                         }
+                         let charge = request.rate_limit_charge();
+-                        let Some(reservation) = charge.take(&mut self.rate_limiter) else {
++                        let Some(mut reservation) = charge.take(&mut self.rate_limiter) else {
+                             // Stop processing the queue and return this descriptor chain to the
+                             // avail ring, for later processing.
+                             queue.undo_pop();
+@@ -743,13 +761,35 @@ impl VirtioBlock {
+                             break;
+                         };
+ 
+-                        let res = request.process(
+-                            &mut self.disk,
+-                            head.index,
+-                            &active_state.mem,
+-                            &self.metrics,
+-                            self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
+-                        );
++                        let previous = next_offset.take();
++                        let small_offset =
++                            small_pairs.then(|| request.small_read_offset()).flatten();
++                        let small_prediction = small_offset.is_some() && previous == small_offset;
++                        let paired = (request.data_len >= 65536 || small_prediction)
++                            && request.try_adjacent_read(
++                                head.index,
++                                &mut self.disk,
++                                queue,
++                                &active_state.mem,
++                                &mut reservation,
++                                &self.metrics,
++                            );
++                        let res = if paired {
++                            ProcessingResult::Submitted
++                        } else {
++                            request.process(
++                                &mut self.disk,
++                                head.index,
++                                &active_state.mem,
++                                &self.metrics,
++                                self.acked_features & (1u64 << VIRTIO_BLK_F_DISCARD) != 0,
++                            )
++                        };
++                        if matches!(res, ProcessingResult::Submitted) {
++                            next_offset = small_offset.and_then(|start| {
++                                start.checked_add(if paired { 8192 } else { 4096 })
++                            });
++                        }
+                         if matches!(
+                             res,
+                             ProcessingResult::Deferred(_) | ProcessingResult::Throttled
+@@ -760,6 +800,7 @@ impl VirtioBlock {
+                         res
+                     }
+                     Err((err, status)) => {
++                        next_offset = None;
+                         error!("Failed to parse available descriptor chain: {:?}", err);
+                         self.metrics.execute_fails.inc();
+                         // The guest must not take a refused request for a success: IOERR in its
+@@ -899,20 +940,20 @@ impl VirtioBlock {
+                             ))),
+                         ),
+                     };
+-                    let finished = pending.finish_with_progress(
+-                        &active_state.mem,
+-                        res,
+-                        progress,
+-                        &self.metrics,
+-                    );
+-                    queue
+-                        .add_used(finished.desc_idx, finished.num_bytes_to_mem)
+-                        .unwrap_or_else(|err| {
+-                            error!(
+-                                "Failed to add available descriptor head {}: {}",
+-                                finished.desc_idx, err
+-                            )
+-                        });
++                    for finished in pending
++                        .finish_async(&active_state.mem, res, progress, &self.metrics)
++                        .into_iter()
++                        .flatten()
++                    {
++                        queue
++                            .add_used(finished.desc_idx, finished.num_bytes_to_mem)
++                            .unwrap_or_else(|err| {
++                                error!(
++                                    "Failed to add available descriptor head {}: {}",
++                                    finished.desc_idx, err
++                                )
++                            });
++                    }
+                 }
+             }
+         }
+@@ -3042,6 +3083,190 @@ mod tests {
+                 .can_proceed(block_io::direct::Wait::Span(0, u64::MAX))
+     }
+ 
++    #[test]
++    fn test_adjacent_read_pair_snapshot_and_limiter() {
++        use crate::vmm_config::machine_config::HugePageConfig;
++        use crate::vstate::memory::{self, Bitmap, GuestRegionMmapExt};
++        use vm_memory::{GuestMemoryBackend, GuestMemoryRegion};
++
++        for (ops, second_write, second_offset, second_guest, paired) in [
++            (2, false, 0x10000, 0x20000, true),
++            (1, false, 0x10000, 0x20000, false),
++            (2, true, 0x10000, 0x20000, false),
++            (2, false, 0, 0x20000, false),
++            (2, false, 0x10000, 0x10000, false),
++        ] {
++            let mem = GuestMemoryMmap::from_regions(
++                memory::anonymous(
++                    [(GuestAddress(0), 0x40000)].into_iter(),
++                    true,
++                    HugePageConfig::None,
++                    false,
++                )
++                .unwrap()
++                .into_iter()
++                .map(|r| GuestRegionMmapExt::dram_from_mmap_region(r, 0))
++                .collect(),
++            )
++            .unwrap();
++            let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
++            let (mut block, f) = direct_block(&mem, &vq);
++            f.as_file().write_all(&[0x22; 0x10000]).unwrap();
++            block
++                .update_disk_image(f.as_path().to_str().unwrap().into())
++                .unwrap();
++            block.metrics = Arc::new(BlockDeviceMetrics::default());
++            set_rate_limiter(
++                &mut block,
++                RateLimiter::new(0x20000, 0, 1_000_000, ops, 0, 1_000_000),
++            );
++            put_req(&vq, 0, false, 0, 0x10000, 0x10000);
++            put_req(&vq, 1, second_write, second_offset, second_guest, 0x10000);
++            vq.avail.idx.set(2);
++            block.process_queue(0).unwrap();
++            let count = if ops == 1 { 1 } else { 2 };
++            assert_eq!(block.queues[0].next_avail.0, count);
++            assert_eq!(block.rate_limiter.is_blocked(), ops == 1);
++            let FileEngine::Async(engine) = &block.disk.file_engine else {
++                unreachable!()
++            };
++            assert_eq!(engine.in_flight(), u32::from(count) - u32::from(paired));
++            assert_eq!(block.metrics.direct_read_pairs.count(), u64::from(paired));
++            block.prepare_save().unwrap();
++            assert_eq!(vq.used.idx.get(), count);
++            let mut completions = (0..usize::from(count))
++                .map(|i| {
++                    let e = vq.used.ring[i].get();
++                    (e.id, e.len)
++                })
++                .collect::<Vec<_>>();
++            completions.sort_unstable();
++            assert_eq!(completions[0], (0, 0x10001));
++            assert_eq!(u32::from(req_status(&mem, 0)), VIRTIO_BLK_S_OK);
++            if count == 2 {
++                assert_eq!(completions[1], (3, if second_write { 1 } else { 0x10001 }));
++                assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_OK);
++            } else {
++                assert_eq!(req_status(&mem, 1), 0xff);
++            }
++            if paired {
++                let bitmap = mem.find_region(GuestAddress(0)).unwrap().bitmap();
++                for page in (0x10000..0x30000).step_by(4096) {
++                    assert!(bitmap.dirty_at(page));
++                }
++                let mut data = vec![0; 0x20000];
++                mem.read_slice(&mut data, GuestAddress(0x10000)).unwrap();
++                assert!(data[..0x10000].iter().all(|&v| v == 0x11));
++                assert!(data[0x10000..].iter().all(|&v| v == 0x22));
++                assert_eq!(block.metrics.read_count.count(), 2);
++                assert_eq!(block.metrics.read_bytes.count(), 0x20000);
++                assert!(!block.rate_limiter.consume(1, TokenType::Ops));
++            }
++        }
++    }
++
++    #[test]
++    fn test_adjacent_read_pair_short_replays_children() {
++        use std::os::unix::fs::FileExt;
++        let mem = single_region_mem(0x40000);
++        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
++        let (mut block, f) = direct_block(&mem, &vq);
++        f.as_file().set_len(0x20000).unwrap();
++        block
++            .update_disk_image(f.as_path().to_str().unwrap().into())
++            .unwrap();
++        // The disk shrinks after virtio learned its size. The first child remains completely
++        // readable, the second remains half readable and then reaches EOF.
++        f.as_file().write_all_at(&[0x44; 0x8000], 0x10000).unwrap();
++        f.as_file().set_len(0x18000).unwrap();
++        block.metrics = Arc::new(BlockDeviceMetrics::default());
++        set_rate_limiter(
++            &mut block,
++            RateLimiter::new(0x20000, 0, 1_000_000, 2, 0, 1_000_000),
++        );
++        put_req(&vq, 0, false, 0, 0x10000, 0x10000);
++        put_req(&vq, 1, false, 0x10000, 0x20000, 0x10000);
++        vq.avail.idx.set(2);
++        block.process_queue(0).unwrap();
++        assert_eq!(block.metrics.direct_read_pairs.count(), 1);
++        block.prepare_save().unwrap();
++        assert_eq!(vq.used.idx.get(), 2);
++        let mut results = (0..2)
++            .map(|n| {
++                let element = vq.used.ring[n].get();
++                (element.id, element.len)
++            })
++            .collect::<Vec<_>>();
++        results.sort_unstable();
++        assert_eq!(results, [(0, 0x10001), (3, 0x8001)]);
++        assert_eq!(u32::from(req_status(&mem, 0)), VIRTIO_BLK_S_OK);
++        assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_IOERR);
++        let mut data = vec![0; 0x20000];
++        mem.read_slice(&mut data, GuestAddress(0x10000)).unwrap();
++        assert!(data[..0x10000].iter().all(|&b| b == 0x11));
++        assert!(data[0x10000..0x18000].iter().all(|&b| b == 0x44));
++        assert!(data[0x18000..].iter().all(|&b| b == 0));
++        assert_eq!(block.metrics.read_count.count(), 1);
++        assert_eq!(block.metrics.read_bytes.count(), 0x18000);
++        assert_eq!(block.metrics.invalid_reqs_count.count(), 1);
++        assert!(!block.rate_limiter.consume(1, TokenType::Ops));
++    }
++
++    #[test]
++    fn test_adjacent_read_pair_orders_overlap_and_marks_failed_read_pages() {
++        use crate::vmm_config::machine_config::HugePageConfig;
++        use crate::vstate::memory::{self, Bitmap, GuestRegionMmapExt};
++        use std::os::unix::fs::FileExt;
++        use vm_memory::{GuestMemoryBackend, GuestMemoryRegion};
++        let mem = GuestMemoryMmap::from_regions(
++            memory::anonymous(
++                [(GuestAddress(0), 0x50000)].into_iter(),
++                true,
++                HugePageConfig::None,
++                false,
++            )
++            .unwrap()
++            .into_iter()
++            .map(|r| GuestRegionMmapExt::dram_from_mmap_region(r, 0))
++            .collect(),
++        )
++        .unwrap();
++        let vq = VirtQueue::new(GuestAddress(0), &mem, 16);
++        let (mut block, f) = direct_block(&mem, &vq);
++        f.as_file().set_len(0x20000).unwrap();
++        block
++            .update_disk_image(f.as_path().to_str().unwrap().into())
++            .unwrap();
++        f.as_file().write_all_at(&[0x33; 4096], 0x10000).unwrap();
++        f.as_file().set_len(0x11000).unwrap();
++        mem.write_slice(&[0xaa; 4096], GuestAddress(0x30000))
++            .unwrap();
++        put_req(&vq, 0, false, 0, 0x10000, 0x10000);
++        put_req(&vq, 1, false, 0x10000, 0x20000, 0x10000);
++        // A write to the second child's data may not overtake replay after short O_DIRECT IO.
++        put_req(&vq, 2, true, 0x10000, 0x30000, 4096);
++        vq.avail.idx.set(3);
++        block.process_queue(0).unwrap();
++        assert_eq!(block.queues[0].next_avail.0, 2);
++        assert_eq!(file_bytes(&f, 0x10000, 4096), vec![0x33; 4096]);
++        block.prepare_save().unwrap();
++        assert_eq!(vq.used.idx.get(), 2);
++        assert_eq!(u32::from(req_status(&mem, 0)), VIRTIO_BLK_S_OK);
++        assert_eq!(u32::from(req_status(&mem, 1)), VIRTIO_BLK_S_IOERR);
++        let bitmap = mem.find_region(GuestAddress(0)).unwrap().bitmap();
++        for offset in (0x10000..0x30000).step_by(4096) {
++            assert!(bitmap.dirty_at(offset));
++        }
++        let mut data = vec![0; 4096];
++        mem.read_slice(&mut data, GuestAddress(0x20000)).unwrap();
++        assert_eq!(data, vec![0x33; 4096]);
++        assert_eq!(req_status(&mem, 2), 0xff);
++        block.process_queue(0).unwrap();
++        block.prepare_save().unwrap();
++        assert_eq!(vq.used.idx.get(), 3);
++        assert_eq!(file_bytes(&f, 0x10000, 4096), vec![0xaa; 4096]);
++    }
++
+     // An aligned write W of block 1 in flight, then a sub-block write S of block 1 (a
+     // read-modify-write), an aligned write W2 of block 1 and an aligned read R of block 2. S
+     // waits at the head of the queue without the VMM thread waiting: queue events and direct
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+index 6de99f4..9395835 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/async_io.rs
+@@ -57,6 +57,7 @@ pub struct AsyncFileEngine {
+     /// The `O_DIRECT` alignment of a direct-I/O drive (`io::direct`); `None`: buffered drive.
+     dio: Option<DioAlign>,
+     ring: IoUring<WrappedRequest>,
++    paired_read_children: u32,
+     completion_evt: EventFd,
+     discard_op: Option<AsyncDiscardOp>,
+     /// Accepted transfers the ring did not take yet: the next window of a request and the next
+@@ -307,6 +308,7 @@ impl AsyncFileEngine {
+             ring,
+             completion_evt,
+             discard_op,
++            paired_read_children: 0,
+             continuations: VecDeque::with_capacity(usize::from(IO_URING_NUM_ENTRIES) * 2),
+             bounce_buf: None,
+             bounce: None,
+@@ -855,7 +857,13 @@ impl AsyncFileEngine {
+ 
+     fn submit_pending(&mut self) -> Result<(), AsyncIoError> {
+         self.submit_ring()?;
+-        while let Some(wrapped) = self.continuations.pop_front() {
++        while !self.continuations.is_empty() {
++            // Replaying two separately charged children after one failed read can require
++            // one more ring slot. Consuming older completions will release it.
++            if !self.ring.can_push().map_err(AsyncIoError::IoUring)? {
++                break;
++            }
++            let wrapped = self.continuations.pop_front().unwrap();
+             let operation = match wrapped {
+                 WrappedRequest::BounceStep => self.bounce_operation(),
+                 WrappedRequest::Guest(op) => match op.operation() {
+@@ -918,6 +926,14 @@ impl AsyncFileEngine {
+                 .expect("continuations are bounded by ring capacity")
+     }
+ 
++    pub fn admitted_read_pair(&mut self) {
++        self.paired_read_children += 2;
++    }
++
++    pub fn has_paired_reads(&self) -> bool {
++        self.paired_read_children != 0
++    }
++
+     pub fn can_accept(&self) -> Result<bool, AsyncIoError> {
+         Ok(self.continuations.is_empty() && self.ring.can_push().map_err(AsyncIoError::IoUring)?)
+     }
+@@ -930,7 +946,20 @@ impl AsyncFileEngine {
+     }
+ 
+     fn pop_inner(&mut self) -> Result<Option<Cqe<Done>>, AsyncIoError> {
++        let done = self.pop_guest_completion()?;
++        Ok(done.map(|cqe| {
++            cqe.map_user_data(|done| {
++                self.paired_read_children -= done.req.completed_pair_children();
++                done
++            })
++        }))
++    }
++
++    fn pop_guest_completion(&mut self) -> Result<Option<Cqe<Done>>, AsyncIoError> {
+         loop {
++            if !self.continuations.is_empty() {
++                self.submit_pending()?;
++            }
+             let Some(cqe) = self.do_pop()? else {
+                 return Ok(None);
+             };
+@@ -956,6 +985,56 @@ impl AsyncFileEngine {
+             for &(addr, len) in &transfer.dirty_segments {
+                 transfer.mem.mark_dirty(addr, len as usize);
+             }
++            // A short or failed combined read cannot identify which child's sectors
++            // are readable. Replay each original read once on the same FD and return
++            // their individual outcomes. No guest descriptor or budget is reacquired.
++            if !matches!(result, Ok(n) if n > 0 && n as usize == transfer.window_bytes)
++                && let Some((first_len, second)) = op.req.take_adjacent_read()
++            {
++                let mut segments = std::mem::take(&mut transfer.dirty_segments);
++                let mut bytes = 0;
++                let split = segments
++                    .iter()
++                    .position(|&(_, len)| {
++                        bytes += len;
++                        bytes == first_len
++                    })
++                    .expect("a paired read consists of whole child segments")
++                    + 1;
++                let second_segments = segments.split_off(split);
++                for (req, data, offset) in [
++                    (op.req, segments, transfer.offset),
++                    (
++                        second,
++                        second_segments,
++                        transfer.offset + u64::from(first_len),
++                    ),
++                ] {
++                    let remaining = segment_iovecs(&transfer.mem, &data).expect(
++                        "the original read validated all segments in these retained mappings",
++                    );
++                    self.continuations.push_back(WrappedRequest::Guest(GuestOp {
++                        req,
++                        writes: None,
++                        transfer: Some(Transfer {
++                            mem: transfer.mem.clone(),
++                            dirty_segments: data,
++                            dirty_scalar: None,
++                            scalar: None,
++                            remaining,
++                            window: Vec::new(),
++                            window_bytes: 0,
++                            window_limit: transfer.window_limit,
++                            offset,
++                            completed: 0,
++                            fd: transfer.fd,
++                            dio: transfer.dio,
++                            write: false,
++                        }),
++                    }));
++                }
++                continue;
++            }
+             if matches!(result, Ok(0))
+                 && transfer.window_bytes == 0
+                 && transfer.remaining.is_empty()
+diff --git a/src/vmm/src/devices/virtio/block/virtio/metrics.rs b/src/vmm/src/devices/virtio/block/virtio/metrics.rs
+index b1ec31f..1e9e92b 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/metrics.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/metrics.rs
+@@ -143,6 +143,12 @@ pub fn flush_metrics<S: Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
+ /// Block Device associated metrics.
+ #[derive(Debug, Default, Serialize)]
+ pub struct BlockDeviceMetrics {
++    /// Number of adjacent guest read pairs submitted as a single host operation.
++    pub direct_read_pairs: SharedIncMetric,
++    /// Parsed lookahead heads for accepted sequential predictions.
++    pub direct_small_pair_lookaheads: SharedIncMetric,
++    /// Successful pairs made of two 4 KiB reads.
++    pub direct_small_read_pairs: SharedIncMetric,
+     /// Number of times when activate failed on a block device.
+     pub activate_fails: SharedIncMetric,
+     /// Number of times when interacting with the space config of a block device failed.
+@@ -228,6 +234,12 @@ impl BlockDeviceMetrics {
+         self.update_fails.add(other.update_fails.fetch_diff());
+         self.read_bytes.add(other.read_bytes.fetch_diff());
+         self.write_bytes.add(other.write_bytes.fetch_diff());
++        self.direct_read_pairs
++            .add(other.direct_read_pairs.fetch_diff());
++        self.direct_small_pair_lookaheads
++            .add(other.direct_small_pair_lookaheads.fetch_diff());
++        self.direct_small_read_pairs
++            .add(other.direct_small_read_pairs.fetch_diff());
+         self.read_count.add(other.read_count.fetch_diff());
+         self.write_count.add(other.write_count.fetch_diff());
+         self.read_agg.sum_us.add(other.read_agg.sum_us.fetch_diff());
+diff --git a/src/vmm/src/devices/virtio/block/virtio/request.rs b/src/vmm/src/devices/virtio/block/virtio/request.rs
+index f2c6a82..06c10fe 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/request.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/request.rs
+@@ -20,7 +20,7 @@ pub use crate::devices::virtio::generated::virtio_blk::{
+     VIRTIO_BLK_T_OUT,
+ };
+ use crate::devices::virtio::queue::{
+-    DescriptorChain, FIRECRACKER_MAX_QUEUE_SIZE, VIRTQ_DESC_F_NEXT,
++    DescriptorChain, FIRECRACKER_MAX_QUEUE_SIZE, Queue, VIRTQ_DESC_F_NEXT,
+ };
+ use crate::logger::{IncMetric, error};
+ use crate::rate_limiter::{BudgetReservation, RateLimiter};
+@@ -126,6 +126,8 @@ impl Status {
+ 
+ #[derive(Debug)]
+ pub struct PendingRequest {
++    adjacent_read: Option<Box<PendingRequest>>,
++    paired_child: bool,
+     r#type: RequestType,
+     data_len: u32,
+     status_addr: GuestAddress,
+@@ -133,6 +135,43 @@ pub struct PendingRequest {
+ }
+ 
+ impl PendingRequest {
++    pub(super) fn completed_pair_children(&self) -> u32 {
++        u32::from(self.paired_child) + u32::from(self.adjacent_read.is_some())
++    }
++
++    pub(super) fn take_adjacent_read(&mut self) -> Option<(u32, PendingRequest)> {
++        self.adjacent_read
++            .take()
++            .map(|second| (self.data_len, *second))
++    }
++
++    /// Map one host result back to the original descriptors. A fully transferred first
++    /// read succeeds even if the second read subsequently fails.
++    pub(super) fn finish_async(
++        mut self,
++        mem: &GuestMemoryMmap,
++        res: Result<u32, IoErr>,
++        progress: u32,
++        metrics: &BlockDeviceMetrics,
++    ) -> [Option<FinishedRequest>; 2] {
++        let Some(second) = self.adjacent_read.take() else {
++            return [
++                Some(self.finish_with_progress(mem, res, progress, metrics)),
++                None,
++            ];
++        };
++        let first_len = self.data_len;
++        let prefix = res.as_ref().copied().unwrap_or(progress);
++        let first = self.finish(mem, Ok(prefix.min(first_len)), metrics);
++        let second = second.finish_with_progress(
++            mem,
++            res.map(|n| n.saturating_sub(first_len)),
++            progress.saturating_sub(first_len),
++            metrics,
++        );
++        [Some(first), Some(second)]
++    }
++
+     fn write_status_and_finish(
+         self,
+         status: &Status,
+@@ -664,8 +703,118 @@ impl Request {
+         }
+     }
+ 
++    // The measured split-request workloads use large reads. Avoid reparsing a second
++    // descriptor for unrelated small random IO. Only join two immediately available heads.
++    pub(super) fn small_read_offset(&self) -> Option<u64> {
++        (self.r#type == RequestType::In
++            && self.data_len == 4096
++            && self.offset().is_multiple_of(4096))
++        .then(|| self.offset())
++    }
++
++    const MIN_PAIR_CHILD: u32 = 64 * 1024;
++    const MAX_PAIR_BYTES: u32 = 1024 * 1024;
++    const MAX_CHILD_SEGMENTS: usize = super::SEG_MAX as usize;
++
++    pub(super) fn try_adjacent_read(
++        &self,
++        index: u16,
++        disk: &mut DiskProperties,
++        queue: &mut Queue,
++        mem: &GuestMemoryMmap,
++        reservation: &mut BudgetReservation<'_>,
++        metrics: &BlockDeviceMetrics,
++    ) -> bool {
++        if !disk.direct_write
++            || self.r#type != RequestType::In
++            || self.segments.len() > Self::MAX_CHILD_SEGMENTS
++            || (self.data_len != 4096
++                && !(Self::MIN_PAIR_CHILD..=Self::MAX_PAIR_BYTES - Self::MIN_PAIR_CHILD)
++                    .contains(&self.data_len))
++        {
++            return false;
++        }
++        let block_io::FileEngine::Async(engine) = &mut disk.file_engine else {
++            return false;
++        };
++        let Ok(Some(head)) = queue.pop() else {
++            return false;
++        };
++
++        if self.data_len == 4096 {
++            metrics.direct_small_pair_lookaheads.inc();
++        }
++        if let Ok(next) = Self::parse_with_status(&head, mem, disk.nsectors)
++            && next.r#type == RequestType::In
++            && next.segments.len() <= Self::MAX_CHILD_SEGMENTS
++            && if self.data_len == 4096 {
++                next.data_len == 4096
++            } else {
++                next.data_len >= Self::MIN_PAIR_CHILD
++            }
++            && next.data_len <= Self::MAX_PAIR_BYTES - self.data_len
++            && self.offset().checked_add(u64::from(self.data_len)) == Some(next.offset())
++            && self.status_addr != next.status_addr
++            && index != head.index
++            && engine.can_proceed(block_io::direct::Wait::Span(
++                self.offset(),
++                next.offset() + u64::from(next.data_len),
++            ))
++        {
++            let mut segments =
++                Vec::with_capacity(self.segments.len().max(1) + next.segments.len().max(1));
++            for req in [self, &next] {
++                if req.segments.is_empty() {
++                    segments.push((req.data_addr, req.data_len));
++                } else {
++                    segments.extend_from_slice(&req.segments);
++                }
++            }
++            // Disallow guest aliases (including either status byte) before collapsing two
++            // independent completions. The host disk ranges are adjacent by construction.
++            let mut ranges = segments.clone();
++            ranges.extend([(self.status_addr, 1), (next.status_addr, 1)]);
++            ranges.sort_unstable_by_key(|r| r.0);
++            let disjoint = ranges.windows(2).all(|pair| {
++                let (addr, len) = pair[0];
++                addr.checked_add(u64::from(len))
++                    .is_some_and(|end| end <= pair[1].0)
++            });
++            let charge = next.rate_limit_charge();
++            if disjoint
++                && let Some(second_budget) = reservation.reserve_next(charge.ops, charge.bytes)
++            {
++                let mut pending = self.to_pending_request(index);
++                pending.paired_child = true;
++                let mut second = next.to_pending_request(head.index);
++                second.paired_child = true;
++                pending.adjacent_read = Some(Box::new(second));
++                // Direct submission checks all guest iovecs and host alignment. On any
++                // refusal restore the second admission and use the existing individual path.
++                let _latency = metrics.read_agg.record_latency_metrics();
++                if engine
++                    .push_readv(self.offset(), mem, segments, pending)
++                    .is_ok()
++                {
++                    engine.admitted_read_pair();
++                    metrics.direct_read_pairs.inc();
++                    if self.data_len == 4096 {
++                        metrics.direct_small_read_pairs.inc();
++                    }
++                    metrics.remaining_reqs_count.add(u64::from(queue.len()));
++                    return true;
++                }
++                second_budget.cancel();
++            }
++        }
++        queue.undo_pop();
++        false
++    }
++
+     fn to_pending_request(&self, desc_idx: u16) -> PendingRequest {
+         PendingRequest {
++            adjacent_read: None,
++            paired_child: false,
+             r#type: self.r#type,
+             data_len: self.data_len,
+             status_addr: self.status_addr,
+@@ -779,6 +928,8 @@ mod tests {
+     impl Default for PendingRequest {
+         fn default() -> Self {
+             PendingRequest {
++                adjacent_read: None,
++                paired_child: false,
+                 r#type: RequestType::In,
+                 data_len: 0,
+                 status_addr: Default::default(),
+@@ -792,6 +943,8 @@ mod tests {
+         let mem = single_region_mem(0x1000);
+         let metrics = BlockDeviceMetrics::default();
+         let req = PendingRequest {
++            adjacent_read: None,
++            paired_child: false,
+             r#type: RequestType::In,
+             data_len: 512,
+             status_addr: GuestAddress(0x100),
+@@ -814,6 +967,62 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn test_adjacent_read_completion_prefix() {
++        for (prefix, error) in [
++            (0, true),
++            (2048, true),
++            (4096, true),
++            (6100, true),
++            (2048, false),
++            (6100, false),
++            (8192, false),
++        ] {
++            let mem = single_region_mem(0x1000);
++            let metrics = BlockDeviceMetrics::default();
++            let child = |id| PendingRequest {
++                desc_idx: id,
++                status_addr: GuestAddress(0x100 + u64::from(id)),
++                data_len: 4096,
++                ..Default::default()
++            };
++            let mut pair = child(2);
++            pair.adjacent_read = Some(Box::new(child(5)));
++            let result = if error {
++                Err(IoErr::PartialTransfer {
++                    completed: prefix,
++                    expected: 8192,
++                })
++            } else {
++                Ok(prefix)
++            };
++            let [Some(first), Some(second)] = pair.finish_async(&mem, result, prefix, &metrics)
++            else {
++                panic!("missing child completion")
++            };
++            for (c, id, transferred) in [
++                (first, 2, prefix.min(4096)),
++                (second, 5, prefix.saturating_sub(4096)),
++            ] {
++                assert_eq!(c.desc_idx, id);
++                assert_eq!(c.num_bytes_to_mem, transferred + 1);
++                let status = mem
++                    .read_obj::<u8>(GuestAddress(0x100 + u64::from(id)))
++                    .unwrap();
++                assert_eq!(
++                    u32::from(status),
++                    if transferred == 4096 {
++                        VIRTIO_BLK_S_OK
++                    } else {
++                        VIRTIO_BLK_S_IOERR
++                    }
++                );
++            }
++            assert_eq!(metrics.read_bytes.count(), u64::from(prefix));
++            assert_eq!(metrics.read_count.count(), u64::from(prefix / 4096));
++        }
++    }
++
+     // The rate limiter's charge is decided in one place: one op for every request, whatever the
+     // number of its data segments; data bytes (all segments) for reads and writes only; a refund
+     // gives back exactly what was taken (a discard deferred behind a read-modify-write must not
+diff --git a/src/vmm/src/rate_limiter/mod.rs b/src/vmm/src/rate_limiter/mod.rs
+index 5c53da9..ee5853d 100644
+--- a/src/vmm/src/rate_limiter/mod.rs
++++ b/src/vmm/src/rate_limiter/mod.rs
+@@ -309,6 +309,16 @@ pub(crate) struct BudgetReservation<'a> {
+ }
+ 
+ impl BudgetReservation<'_> {
++    /// Reserve another independently admitted operation while the previous admission can
++    /// still be refunded. A failed second admission retains the limiter's normal retry timer.
++    pub(crate) fn reserve_next(
++        &mut self,
++        ops: u64,
++        bytes: Option<u64>,
++    ) -> Option<BudgetReservation<'_>> {
++        self.limiter.reserve(ops, bytes)
++    }
++
+     pub(crate) fn cancel(self) {
+         self.limiter.ops = self.previous_ops;
+         self.limiter.bandwidth = self.previous_bandwidth;

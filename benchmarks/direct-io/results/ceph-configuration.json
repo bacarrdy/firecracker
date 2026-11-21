@@ -1,0 +1,110 @@
+{
+  "boots": [
+    {
+      "window": "window1",
+      "seed": 251121,
+      "mode": "pr-buffered",
+      "sha": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "segments": 1,
+      "fd_flags": 557058,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window1",
+      "seed": 251121,
+      "mode": "pr-direct",
+      "sha": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "segments": 1,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251121,
+      "mode": "pr-direct",
+      "sha": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "segments": 1,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251121,
+      "mode": "rc1-direct",
+      "sha": "d7f1e4e8318243a64f3eb0bb58d01126979554776a292016135d22886959de2f",
+      "segments": 32,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251121,
+      "mode": "b22-fixed-direct",
+      "sha": "d3a5a44bf167682e1c1fee5a03ac2c49885c7177c2381217558230247c7e3ebf",
+      "segments": 32,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251122,
+      "mode": "b22-fixed-direct",
+      "sha": "d3a5a44bf167682e1c1fee5a03ac2c49885c7177c2381217558230247c7e3ebf",
+      "segments": 32,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251122,
+      "mode": "rc1-direct",
+      "sha": "d7f1e4e8318243a64f3eb0bb58d01126979554776a292016135d22886959de2f",
+      "segments": 32,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251122,
+      "mode": "pr-direct",
+      "sha": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "segments": 1,
+      "fd_flags": 573442,
+      "kernel": "6.1.190"
+    },
+    {
+      "window": "window2",
+      "seed": 251122,
+      "mode": "pr-buffered",
+      "sha": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "segments": 1,
+      "fd_flags": 557058,
+      "kernel": "6.1.190"
+    }
+  ],
+  "effective_rbd_qos": [
+    {
+      "window": "window1",
+      "iq_readback": {
+        "rbd_qos_bps_limit": "0",
+        "rbd_qos_iops_limit": "0",
+        "rbd_qos_read_bps_limit": "0",
+        "rbd_qos_read_iops_limit": "0",
+        "rbd_qos_write_bps_limit": "0",
+        "rbd_qos_write_iops_limit": "0"
+      }
+    },
+    {
+      "window": "window2",
+      "iq_readback": {
+        "rbd_qos_bps_limit": "0",
+        "rbd_qos_iops_limit": "0",
+        "rbd_qos_read_bps_limit": "0",
+        "rbd_qos_read_iops_limit": "0",
+        "rbd_qos_write_bps_limit": "0",
+        "rbd_qos_write_iops_limit": "0"
+      }
+    }
+  ],
+  "windows": 2
+}

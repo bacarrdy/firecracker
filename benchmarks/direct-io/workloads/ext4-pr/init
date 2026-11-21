@@ -1,0 +1,16 @@
+#!/bin/busybox sh
+set -eu
+busybox=/bin/busybox
+$busybox mount -t devtmpfs devtmpfs /dev
+$busybox mount -t sysfs sysfs /sys
+$busybox mount -t proc proc /proc
+for i in $($busybox seq 1 100); do
+    [ -b /dev/vda ] && break
+    $busybox sleep 0.05
+done
+echo "QA logical-block-size $($busybox cat /sys/block/vda/queue/logical_block_size)"
+set +e
+/bin/probe </dev/ttyS0
+echo "QA exit $?"
+$busybox sleep 5
+$busybox poweroff -f

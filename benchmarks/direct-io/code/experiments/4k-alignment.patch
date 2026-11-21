@@ -1,0 +1,92 @@
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/direct.rs b/src/vmm/src/devices/virtio/block/virtio/io/direct.rs
+index d469f6171..d948d1ad9 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/direct.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/direct.rs
+@@ -60,7 +60,7 @@ use crate::vstate::memory::{GuestAddress, GuestMemoryMmap};
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+ pub struct DioAlign {
+     /// Required alignment of the memory buffer.
+-    pub mem: u64,
++    pub(super) mem: u64,
+     /// Required alignment of the file offset and of the length.
+     pub offset: u64,
+ }
+@@ -140,7 +140,7 @@ impl DioAlign {
+             }
+             _ => return None,
+         };
+-        if align > FILE_ALIGN {
++        if !align.is_power_of_two() || align > FILE_ALIGN {
+             return None;
+         }
+         Some(DioAlign {
+@@ -152,24 +152,31 @@ impl DioAlign {
+     /// Whether a transfer of `count` bytes at `offset` from/to `buf` can use `O_DIRECT` as is.
+     pub fn eligible(&self, buf: usize, offset: u64, count: u32) -> bool {
+         count != 0
+-            && (buf as u64).is_multiple_of(self.mem)
+-            && offset.is_multiple_of(self.offset)
+-            && u64::from(count).is_multiple_of(self.offset)
++            && aligned(buf as u64, self.mem)
++            && aligned(offset, self.offset)
++            && aligned(u64::from(count), self.offset)
+     }
+ 
+     /// Whether a vectored transfer at `offset` from/to the host buffers `iovecs` can use
+     /// `O_DIRECT` as is: the offset and every buffer (address and length) aligned, none empty.
+     pub fn eligible_iovecs(&self, iovecs: &[libc::iovec], offset: u64) -> bool {
+         !iovecs.is_empty()
+-            && offset.is_multiple_of(self.offset)
++            && aligned(offset, self.offset)
+             && iovecs.iter().all(|iov| {
+                 iov.iov_len != 0
+-                    && (iov.iov_base as u64).is_multiple_of(self.mem)
+-                    && (iov.iov_len as u64).is_multiple_of(self.offset)
++                    && aligned(iov.iov_base as u64, self.mem)
++                    && aligned(iov.iov_len as u64, self.offset)
+             })
+     }
+ }
+ 
++// The backing file's alignment is validated at open. Each SQE only needs to
++// test its low bits, including when buffer and offset alignments differ.
++fn aligned(value: u64, alignment: u64) -> bool {
++    debug_assert!(alignment.is_power_of_two());
++    value & (alignment - 1) == 0
++}
++
+ /// Call `f(guest address, offset in the buffer, length)` for each piece of the guest bytes
+ /// `[from, from + len)` of a request whose data is `segments`, in order.
+ fn for_each_guest_part<F>(
+@@ -641,6 +648,31 @@ mod tests {
+         assert!(d.eligible(0x1200, 0x2200, 0x200));
+     }
+ 
++    #[test]
++    fn test_scalar_and_iovec_alignment_match_divisibility() {
++        for mem in [1, 512, 1024, 2048, 4096, 65536] {
++            for offset in [1, 512, 1024, 2048, 4096] {
++                let dio = DioAlign { mem, offset };
++                for buf in [0usize, 1, 511, 512, 4095, 4096, 65536, usize::MAX] {
++                    for pos in [0, 1, 511, 512, 4096, u64::MAX - 511, u64::MAX] {
++                        for len in [0u32, 1, 511, 512, 4096, u32::MAX] {
++                            let expected = len != 0
++                                && (buf as u64).is_multiple_of(mem)
++                                && pos.is_multiple_of(offset)
++                                && u64::from(len).is_multiple_of(offset);
++                            assert_eq!(dio.eligible(buf, pos, len), expected);
++                            let iov = libc::iovec {
++                                iov_base: std::ptr::without_provenance_mut(buf),
++                                iov_len: len as usize,
++                            };
++                            assert_eq!(dio.eligible_iovecs(&[iov], pos), expected);
++                        }
++                    }
++                }
++            }
++        }
++    }
++
+     // Regular files: 4096, unless the size is not a multiple of it (the last blocks would run
+     // past the end of the file): then no direct I/O at all.
+     #[test]

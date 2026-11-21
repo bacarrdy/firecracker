@@ -1,0 +1,94 @@
+diff --git a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+index 9089af7b8..2d4967c44 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/io/mod.rs
+@@ -242,19 +242,6 @@ impl FileEngine {
+         }
+     }
+ 
+-    /// Direct I/O: whether the single guest buffer `[addr, addr + count)` must bounce at
+-    /// `offset`. A buffer outside guest memory does not bounce: the engine reports it as before.
+-    fn scalar_bounces(
+-        dio: DioAlign,
+-        mem: &GuestMemoryMmap,
+-        addr: GuestAddress,
+-        offset: u64,
+-        count: u32,
+-    ) -> bool {
+-        mem.get_slice(addr, count as usize)
+-            .is_ok_and(|slice| !dio.eligible(slice.ptr_guard().as_ptr() as usize, offset, count))
+-    }
+-
+     /// Direct I/O: whether the guest buffers `segments` must bounce at `offset` (one of them,
+     /// or the offset, not aligned). Segments outside guest memory do not bounce: the engine
+     /// reports them as before.
+@@ -334,15 +321,15 @@ impl FileEngine {
+         if count == 0 {
+             return executed(req, 0);
+         }
+-        // Direct I/O: a request O_DIRECT cannot take as is bounces.
+-        if let Some(dio) = self.dio()
+-            && Self::scalar_bounces(dio, mem, addr, offset, count)
+-        {
+-            return self.bounce(false, offset, count, vec![(addr, count)], mem, req);
+-        }
++        // The engine checks alignment on the guest address it already translated.
++        // DirectUnaligned is produced before any host I/O is issued.
+         match self {
+             FileEngine::Async(engine) => match engine.push_read(offset, mem, addr, count, req) {
+                 Ok(_) => Ok(FileEngineOk::Submitted),
++                Err(RequestError {
++                    req,
++                    error: AsyncIoError::DirectUnaligned,
++                }) => self.bounce(false, offset, count, vec![(addr, count)], mem, req),
+                 Err(err) => Err(RequestError {
+                     req: err.req,
+                     error: BlockIoError::Async(err.error),
+@@ -350,6 +337,9 @@ impl FileEngine {
+             },
+             FileEngine::Sync(engine) => match engine.read(offset, mem, addr, count) {
+                 Ok(count) => executed(req, count),
++                Err(SyncIoError::DirectUnaligned) => {
++                    self.bounce(false, offset, count, vec![(addr, count)], mem, req)
++                }
+                 Err(err) => Err(RequestError {
+                     req,
+                     error: BlockIoError::Sync(err),
+@@ -371,16 +361,24 @@ impl FileEngine {
+             if count == 0 {
+                 return executed(req, 0);
+             }
+-            if Self::scalar_bounces(dio, mem, addr, offset, count) {
+-                return self.bounce(true, offset, count, vec![(addr, count)], mem, req);
+-            }
+             if let Some(deferred) = self.defer_for_rmw(offset, u64::from(count)) {
++                // Sub-block writers must wait for all writes in their enclosing block.
++                // Only an already overlapping RMW needs this check before submission.
++                if mem.get_slice(addr, count as usize).is_ok_and(|slice| {
++                    !dio.eligible(slice.ptr_guard().as_ptr() as usize, offset, count)
++                }) {
++                    return self.bounce(true, offset, count, vec![(addr, count)], mem, req);
++                }
+                 return Ok(deferred);
+             }
+         }
+         match self {
+             FileEngine::Async(engine) => match engine.push_write(offset, mem, addr, count, req) {
+                 Ok(_) => Ok(FileEngineOk::Submitted),
++                Err(RequestError {
++                    req,
++                    error: AsyncIoError::DirectUnaligned,
++                }) => self.bounce(true, offset, count, vec![(addr, count)], mem, req),
+                 Err(err) => Err(RequestError {
+                     req: err.req,
+                     error: BlockIoError::Async(err.error),
+@@ -388,6 +386,9 @@ impl FileEngine {
+             },
+             FileEngine::Sync(engine) => match engine.write(offset, mem, addr, count) {
+                 Ok(count) => executed(req, count),
++                Err(SyncIoError::DirectUnaligned) => {
++                    self.bounce(true, offset, count, vec![(addr, count)], mem, req)
++                }
+                 Err(err) => Err(RequestError {
+                     req,
+                     error: BlockIoError::Sync(err),

@@ -1,0 +1,52 @@
+From 2a68105d4541b2d3cc593b75b68a56089804d8e5 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:14:59 +0200
+Subject: [PATCH 3/3] io_uring: exercise a single entry through repeated wraps
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+
+diff --git a/src/vmm/tests/io_uring.rs b/src/vmm/tests/io_uring.rs
+index 7f7a6708c..8d80cfc0c 100644
+--- a/src/vmm/tests/io_uring.rs
++++ b/src/vmm/tests/io_uring.rs
+@@ -468,3 +468,37 @@ fn test_read() {
+     // Verify the result.
+     assert_eq!(buf, &init_contents[..]);
+ }
++
++#[test]
++fn test_single_entry_ring_wrap_and_completion() {
++    let file = TempFile::new().unwrap().into_file();
++    file.write_all_at(b"small ring", 0).unwrap();
++    let mut ring = IoUring::new(
++        1,
++        vec![&file],
++        vec![
++            Restriction::RequireFixedFds,
++            Restriction::AllowOpCode(OpCode::Read),
++        ],
++        None,
++    )
++    .unwrap();
++    for (offset, value) in b"small ring".iter().enumerate() {
++        let mut data = [0_u8];
++        ring.push(Operation::read(
++            0,
++            data.as_mut_ptr() as usize,
++            1,
++            offset as u64,
++            offset,
++        ))
++        .unwrap();
++        assert_eq!(ring.pending_sqes().unwrap(), 1);
++        assert_eq!(ring.submit_and_wait_all().unwrap(), 1);
++        let completion = ring.pop().unwrap().unwrap();
++        assert_eq!(completion.result().unwrap(), 1);
++        assert_eq!(completion.user_data(), offset);
++        assert_eq!(data[0], *value);
++        assert_eq!(ring.pending_sqes().unwrap(), 0);
++    }
++}
+-- 
+2.43.0
+

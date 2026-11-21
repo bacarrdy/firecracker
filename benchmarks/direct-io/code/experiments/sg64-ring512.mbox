@@ -1,0 +1,270 @@
+From ad1a2dc7bb4e3b1745320394557472eacd4d8ea6 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 18:13:05 +0200
+Subject: [PATCH] virtio-blk: qualify a 512-entry queue in the boot-only SG64
+ experiment
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ src/firecracker/Cargo.toml                    |  1 +
+ src/vmm/Cargo.toml                            |  1 +
+ .../virtio/block/virtio/event_tests.rs        | 85 ++++++++++++++++++-
+ .../src/devices/virtio/block/virtio/mod.rs    |  8 +-
+ .../devices/virtio/block/virtio/persist.rs    | 11 ++-
+ .../devices/virtio/block/virtio/request.rs    | 18 ++++
+ src/vmm/src/devices/virtio/queue.rs           |  6 ++
+ 7 files changed, 123 insertions(+), 7 deletions(-)
+
+diff --git a/src/firecracker/Cargo.toml b/src/firecracker/Cargo.toml
+index 30eaf0f11..19e795431 100644
+--- a/src/firecracker/Cargo.toml
++++ b/src/firecracker/Cargo.toml
+@@ -20,6 +20,7 @@ tracing = ["log-instrument", "utils/tracing", "vmm/tracing"]
+ fuzzing = ["vmm/fuzzing"]
+ gdb = ["vmm/gdb"]
+ sg64-experiment = ["vmm/sg64-experiment"]
++sg64-q512-experiment = ["sg64-experiment", "vmm/sg64-q512-experiment"]
+ 
+ [dependencies]
+ displaydoc = "0.2.6"
+diff --git a/src/vmm/Cargo.toml b/src/vmm/Cargo.toml
+index 528f81d0d..3fdd1f555 100644
+--- a/src/vmm/Cargo.toml
++++ b/src/vmm/Cargo.toml
+@@ -14,6 +14,7 @@ tracing = ["log-instrument"]
+ gdb = ["gdbstub", "gdbstub_arch"]
+ fuzzing = []
+ sg64-experiment = []
++sg64-q512-experiment = ["sg64-experiment"]
+ 
+ [dependencies]
+ 
+diff --git a/src/vmm/src/devices/virtio/block/virtio/event_tests.rs b/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
+index 23abb1b8c..5bfdfa766 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/event_tests.rs
+@@ -124,12 +124,16 @@ enum Kind {
+ 
+ impl<'a> Guest<'a> {
+     fn new(mem: &'a GuestMemoryMmap) -> Self {
++        Self::with_size(mem, QSIZE)
++    }
++
++    fn with_size(mem: &'a GuestMemoryMmap, size: u16) -> Self {
+         Guest {
+-            vq: VirtQueue::new(GuestAddress(0), mem, QSIZE),
++            vq: VirtQueue::new(GuestAddress(0), mem, size),
+             mem,
+             avail: 0,
+             used_seen: 0,
+-            free_desc: (0..QSIZE).rev().collect(),
++            free_desc: (0..size).rev().collect(),
+             heads: BTreeMap::new(),
+         }
+     }
+@@ -211,7 +215,7 @@ impl<'a> Guest<'a> {
+             }
+         }
+         self.vq.dtable[descs[n - 1] as usize].set(status.0, 1, VIRTQ_DESC_F_WRITE, 0);
+-        self.vq.avail.ring[usize::from(self.avail % QSIZE)].set(descs[0]);
++        self.vq.avail.ring[usize::from(self.avail % self.vq.size())].set(descs[0]);
+         self.avail = self.avail.wrapping_add(1);
+         self.vq.avail.idx.set(self.avail);
+         self.heads.insert(descs[0], (slot, descs));
+@@ -233,7 +237,7 @@ impl<'a> Guest<'a> {
+     fn used(&mut self) -> Vec<(u16, u32)> {
+         let mut out = vec![];
+         while self.used_seen != self.vq.used.idx.get() {
+-            let e = self.vq.used.ring[usize::from(self.used_seen % QSIZE)].get();
++            let e = self.vq.used.ring[usize::from(self.used_seen % self.vq.size())].get();
+             self.used_seen = self.used_seen.wrapping_add(1);
+             let (slot, descs) = self
+                 .heads
+@@ -2110,3 +2114,76 @@ fn audit_f2_deferred_write_keeps_the_one_time_burst() {
+     once_each(&used, 2);
+     assert_eq!(burst, 1, "the deferral consumed the one-time burst");
+ }
++
++#[cfg(feature = "sg64-q512-experiment")]
++#[test]
++fn q512_block_completes_high_heads_across_index_wrap() {
++    let mem = single_region_mem(4 << 20);
++    let mut guest = Guest::with_size(&mem, 512);
++    let f = backing(1 << 20, 0x5c);
++    let mut block = make_block(
++        f.as_path().to_str().unwrap(),
++        FileEngineType::Async,
++        false,
++        &mem,
++        &guest.vq,
++    );
++    assert_eq!(super::BLOCK_QUEUE_SIZES, [512]);
++
++    // Start with head 511. Both rings turn over from slot 511 to slot zero
++    // and their 16-bit producer and consumer indices wrap in these two reads.
++    guest.free_desc = (0..512).collect();
++    guest.avail = u16::MAX;
++    guest.used_seen = u16::MAX;
++    guest.vq.avail.idx.set(u16::MAX);
++    guest.vq.used.idx.set(u16::MAX);
++    block.queues[0].next_avail.0 = u16::MAX;
++    block.queues[0].next_used.0 = u16::MAX;
++
++    let segs: Vec<_> = (0..64).map(|i| (DATA_BASE + i * 8192, 4096)).collect();
++    assert!(guest.submit_segs(0, Kind::Read, 0, 64 * 4096, &segs));
++    guest.submit(1, Kind::Read, 0, 4096, DATA_BASE + (1 << 20));
++    assert_eq!(guest.vq.avail.ring[511].get(), 511);
++    assert_eq!(guest.vq.avail.ring[0].get(), 445);
++    guest.kick(&mut block);
++    let mut used = wait_used(&mut block, &mut guest, 2);
++    used.sort_unstable();
++    assert_eq!(used, [(0, 64 * 4096 + 1), (1, 4097)]);
++    ok(&guest, &[0, 1]);
++    assert_eq!(guest.used_seen, 1);
++    for (addr, _) in segs.into_iter().chain([(DATA_BASE + (1 << 20), 4096)]) {
++        let mut bytes = [0; 4096];
++        mem.read_slice(&mut bytes, GuestAddress(addr)).unwrap();
++        assert_eq!(bytes, [0x5c; 4096]);
++    }
++}
++
++#[cfg(feature = "sg64-q512-experiment")]
++#[test]
++fn q512_queue_geometry_and_index_limits() {
++    use crate::devices::virtio::queue::QueueError;
++
++    let mem = single_region_mem(0x10000);
++    let vq = VirtQueue::new(GuestAddress(0), &mem, 512);
++    let mut q = vq.create_queue();
++    assert_eq!(vq.avail_start().0, 8192);
++    assert_eq!(vq.used_start().0, 9224);
++    assert!(matches!(
++        q.add_used(512, 0),
++        Err(QueueError::DescIndexOutOfBounds(512))
++    ));
++    assert!(q.add_used(511, 0).is_ok());
++    vq.avail.ring[0].set(512);
++    vq.avail.idx.set(1);
++    assert!(q.pop().unwrap().is_none());
++    for size in [0, 511, 513, 1024] {
++        q.size = size;
++        assert!(matches!(q.initialize(&mem), Err(QueueError::InvalidSize(n)) if n == size));
++    }
++    q.size = 512;
++    q.used_ring_address = GuestAddress(0x10000 - 4096);
++    assert!(matches!(
++        q.initialize(&mem),
++        Err(QueueError::MemoryError(_))
++    ));
++}
+diff --git a/src/vmm/src/devices/virtio/block/virtio/mod.rs b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+index 8ea725f99..04ffee1c2 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/mod.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/mod.rs
+@@ -48,7 +48,13 @@ pub(super) const BOOT_SEG_MAX: u32 = if cfg!(feature = "sg64-experiment") {
+ };
+ /// The number of queues of block device.
+ pub const BLOCK_NUM_QUEUES: usize = 1;
+-pub const BLOCK_QUEUE_SIZES: [u16; BLOCK_NUM_QUEUES] = [FIRECRACKER_MAX_QUEUE_SIZE];
++/// Only the private fresh-boot experiment offers a larger block queue.
++pub const BLOCK_QUEUE_SIZES: [u16; BLOCK_NUM_QUEUES] =
++    [if cfg!(feature = "sg64-q512-experiment") {
++        512
++    } else {
++        FIRECRACKER_MAX_QUEUE_SIZE
++    }];
+ // A request spreads across N + 2 descriptors (N <= SEG_MAX), but it is admitted as ONE initial
+ // SQE, so 128 IO_URING entries never trigger a FullSq error from the segment count.
+ /// Maximum number of io uring entries we allow in the queue.
+diff --git a/src/vmm/src/devices/virtio/block/virtio/persist.rs b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+index 9c53d4eaf..cd6554390 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/persist.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/persist.rs
+@@ -222,6 +222,13 @@ mod tests {
+         assert_eq!(FileEngineTypeState::default(), FileEngineTypeState::Sync);
+     }
+ 
++    // Unit tests for historical on-disk state use that format's fixed queue size.
++    fn legacy_block(config: VirtioBlockConfig) -> VirtioBlock {
++        let mut block = VirtioBlock::new(config).unwrap();
++        block.queues[0] = crate::devices::virtio::queue::Queue::new(FIRECRACKER_MAX_QUEUE_SIZE);
++        block
++    }
++
+     #[test]
+     fn test_persistence() {
+         // We create the backing file here so that it exists for the whole lifetime of the test.
+@@ -243,7 +250,7 @@ mod tests {
+             direct_write: false,
+         };
+ 
+-        let block = VirtioBlock::new(config).unwrap();
++        let block = legacy_block(config);
+         let guest_mem = default_mem();
+ 
+         // Save the block device.
+@@ -299,7 +306,7 @@ mod tests {
+         };
+ 
+         // New device, guest negotiated SEG_MAX.
+-        let mut block = VirtioBlock::new(config()).unwrap();
++        let mut block = legacy_block(config());
+         assert_ne!(block.avail_features() & seg_bit, 0);
+         block.acked_features = block.avail_features();
+         let restored = restore(&block.save());
+diff --git a/src/vmm/src/devices/virtio/block/virtio/request.rs b/src/vmm/src/devices/virtio/block/virtio/request.rs
+index f2c6a8260..80fa1b49d 100644
+--- a/src/vmm/src/devices/virtio/block/virtio/request.rs
++++ b/src/vmm/src/devices/virtio/block/virtio/request.rs
+@@ -442,6 +442,10 @@ impl Request {
+         writable: &mut DescriptorStream,
+     ) -> Result<(), VirtioBlockError> {
+         let mut desc = *avail_desc;
++        // More simultaneous requests can use the table, but each request retains its
++        // original traversal budget, including zero-length descriptors.
++        #[cfg(feature = "sg64-q512-experiment")]
++        desc.limit_chain_len(FIRECRACKER_MAX_QUEUE_SIZE);
+         let mut seen_writable = false;
+         let mut chain_len = 0u64;
+         loop {
+@@ -1260,6 +1264,20 @@ mod tests {
+         ));
+     }
+ 
++    #[cfg(feature = "sg64-q512-experiment")]
++    #[test]
++    fn q512_preserves_original_chain_budget() {
++        let mem = single_region_mem(0x400000);
++        // Keep the table clear of multi_chain's header and payload buffers.
++        let vq = VirtQueue::new(GuestAddress(0x200000), &mem, 512);
++        for (count, fits) in [(254, true), (255, false)] {
++            let mut spans = vec![(0, false); count];
++            spans[0] = (512, false);
++            multi_chain(&vq, VIRTIO_BLK_T_OUT, 0, &spans);
++            assert_eq!(parse_multi(&vq, NUM_DISK_SECTORS).is_ok(), fits);
++        }
++    }
++
+     #[test]
+     fn test_descriptor_stream_capacity() {
+         let mut stream = DescriptorStream::new();
+diff --git a/src/vmm/src/devices/virtio/queue.rs b/src/vmm/src/devices/virtio/queue.rs
+index 3621735d5..fb5dc0889 100644
+--- a/src/vmm/src/devices/virtio/queue.rs
++++ b/src/vmm/src/devices/virtio/queue.rs
+@@ -138,6 +138,12 @@ impl DescriptorChain {
+         if chain.is_valid() { Some(chain) } else { None }
+     }
+ 
++    /// Cap traversal independently of which table indices the chain uses.
++    #[cfg(feature = "sg64-q512-experiment")]
++    pub(super) fn limit_chain_len(&mut self, limit: u16) {
++        self.ttl = self.ttl.min(limit);
++    }
++
+     fn is_valid(&self) -> bool {
+         !self.has_next() || self.next < self.queue_size
+     }
+-- 
+2.43.0
+

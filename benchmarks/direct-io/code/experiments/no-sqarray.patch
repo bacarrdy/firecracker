@@ -1,0 +1,122 @@
+From 74660529c1e7484f0b7a0491ec949c6bfe261212 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 20:11:54 +0200
+Subject: [PATCH 1/3] io_uring: use the direct SQE layout when available
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+
+diff --git a/src/vmm/src/io_uring/mod.rs b/src/vmm/src/io_uring/mod.rs
+index 62b32986c..57f6e1216 100644
+--- a/src/vmm/src/io_uring/mod.rs
++++ b/src/vmm/src/io_uring/mod.rs
+@@ -75,6 +75,26 @@ impl IoUringError {
+     }
+ }
+ 
++// Always start disabled so restrictions and fixed files are installed before any submissions.
++fn setup_ring(num_entries: u32, extra_flags: u32) -> Result<(File, io_uring_params), IOError> {
++    let mut params = io_uring_params {
++        flags: generated::IORING_SETUP_R_DISABLED | extra_flags,
++        ..Default::default()
++    };
++    // SAFETY: params is writable for the duration of the syscall.
++    let fd = SyscallReturnCode(unsafe {
++        libc::syscall(
++            libc::SYS_io_uring_setup,
++            num_entries,
++            &mut params as *mut io_uring_params,
++        )
++    })
++    .into_result()?;
++    // SAFETY: io_uring_setup returned a new file descriptor owned by this caller.
++    let file = unsafe { File::from_raw_fd(RawFd::try_from(fd).unwrap()) };
++    Ok((file, params))
++}
++
+ /// Main object representing an io_uring instance.
+ #[derive(Debug)]
+ pub struct IoUring<T> {
+@@ -126,29 +146,17 @@ impl<T: Debug> IoUring<T> {
+         eventfd: Option<RawFd>,
+         required_ops: &[OpCode],
+     ) -> Result<Self, IoUringError> {
+-        let mut params = io_uring_params {
+-            // Create the ring as disabled, so that we may register restrictions.
+-            flags: generated::IORING_SETUP_R_DISABLED,
+-
+-            ..Default::default()
+-        };
+-
+-        // SAFETY: Safe because values are valid and we check the return value.
+-        let fd = SyscallReturnCode(unsafe {
+-            libc::syscall(
+-                libc::SYS_io_uring_setup,
+-                num_entries,
+-                &mut params as *mut io_uring_params,
+-            )
+-        })
+-        .into_result()
+-        .map_err(IoUringError::Setup)?;
+-        // Safe to unwrap because the fd is valid.
+-        let fd = RawFd::try_from(fd).unwrap();
+-
+-        // SAFETY: Safe because the fd is valid and because this struct owns the fd.
+-        let file = unsafe { File::from_raw_fd(fd) };
+-
++        let (file, params) = setup_ring(num_entries, generated::IORING_SETUP_NO_SQARRAY)
++            .or_else(|err| {
++                // Kernels predating NO_SQARRAY reject the flag with EINVAL.
++                if err.raw_os_error() == Some(libc::EINVAL) {
++                    setup_ring(num_entries, 0)
++                } else {
++                    Err(err)
++                }
++            })
++            .map_err(IoUringError::Setup)?;
++        let fd = file.as_raw_fd();
+         Self::check_features(params)?;
+ 
+         let squeue = SubmissionQueue::new(fd, &params).map_err(IoUringError::SQueue)?;
+diff --git a/src/vmm/src/io_uring/queue/submission.rs b/src/vmm/src/io_uring/queue/submission.rs
+index 06ea26abf..5c582cd92 100644
+--- a/src/vmm/src/io_uring/queue/submission.rs
++++ b/src/vmm/src/io_uring/queue/submission.rs
+@@ -59,11 +59,12 @@ impl SubmissionQueue {
+         let (ring, sqes) = Self::mmap(io_uring_fd, params)?;
+         let ring_slice = ring.as_volatile_slice();
+ 
+-        // since we don't need the extra layer of indirection, we can simply map the index array
+-        // to be array[i] = i;
+-        let sq_array = ring_slice.offset(params.sq_off.array as usize)?;
+-        for i in 0..params.sq_entries {
+-            sq_array.write_obj(i, mem::size_of::<u32>() * (i as usize))?;
++        if params.flags & generated::IORING_SETUP_NO_SQARRAY == 0 {
++            // The legacy ABI needs an identity mapping from the ring slot to the SQE.
++            let sq_array = ring_slice.offset(params.sq_off.array as usize)?;
++            for i in 0..params.sq_entries {
++                sq_array.write_obj(i, mem::size_of::<u32>() * (i as usize))?;
++            }
+         }
+ 
+         let ring_mask = ring_slice.read_obj(params.sq_off.ring_mask as usize)?;
+@@ -156,10 +157,13 @@ impl SubmissionQueue {
+         io_uring_fd: RawFd,
+         params: &generated::io_uring_params,
+     ) -> Result<(MmapRegion, MmapRegion), SQueueError> {
+-        // map the SQ_ring. The actual size of the ring is `num_entries * size_of(entry_type)`.
+-        // To this we add an offset as per the io_uring specifications.
+-        let sqe_ring_size =
+-            (params.sq_off.array as usize) + (params.sq_entries as usize) * mem::size_of::<u32>();
++        let offsets = &params.sq_off;
++        let sqe_ring_size = if params.flags & generated::IORING_SETUP_NO_SQARRAY != 0 {
++            // Without an index array its offset is unused. Map the SQ fields we access.
++            offsets.head.max(offsets.tail).max(offsets.ring_mask) as usize + mem::size_of::<u32>()
++        } else {
++            offsets.array as usize + params.sq_entries as usize * mem::size_of::<u32>()
++        };
+ 
+         let sqe_ring = mmap(
+             sqe_ring_size,
+-- 
+2.43.0
+

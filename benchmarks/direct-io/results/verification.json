@@ -1,0 +1,144 @@
+{
+  "main": "29c04bb6c63b765b52f39cd9be4a0461957c8500",
+  "combined": "2c49d3210741cd5ca2a9cdc97d7285b15453577d",
+  "portable_fixed": "df2f9f453a43b6076b99ec4f1fdd80707a39a65c",
+  "single_open_fixed_source": "a6c4e0eb2e627d4285700fda6f9f45bccf350dc4",
+  "local": [
+    {
+      "build": "one-open-b22",
+      "sha256": "b22ed8ad647feb6b06aa640f957aea45ff8192a498c68364621603138342630f",
+      "guest_phases": 48
+    },
+    {
+      "build": "one-open-b22-fixed",
+      "sha256": "d3a5a44bf167682e1c1fee5a03ac2c49885c7177c2381217558230247c7e3ebf",
+      "guest_phases": 48
+    },
+    {
+      "build": "one-open-rc1",
+      "sha256": "d7f1e4e8318243a64f3eb0bb58d01126979554776a292016135d22886959de2f",
+      "guest_phases": 48
+    },
+    {
+      "build": "pr-direct-sg1",
+      "sha256": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "guest_phases": 48
+    },
+    {
+      "build": "stock",
+      "sha256": "23893681c0491bae55744e9616085faba589162efab2d63f346199e13d7b9b9e",
+      "guest_phases": 48
+    },
+    {
+      "build": "two-open-direct",
+      "sha256": "4d1253ecbd42b33725763db93bbceeb1c74fe2f0d51128f0259f994dab049c04",
+      "guest_phases": 48
+    },
+    {
+      "build": "two-open-mixed",
+      "sha256": "93d47ab452d4edd358f7fcec59585d4198f984a00bf4b5cbb3a73b53b9ee4613",
+      "guest_phases": 48
+    }
+  ],
+  "workstation": [
+    {
+      "campaign": "original",
+      "commit": "f3b02ba92",
+      "binary_sha256": "8be5cf42269dbea456b54fcf2d7b9fa16a147abf4fe88e02d003106cead12b19",
+      "guest_kernel_sha256": "fd6951f02f4fd11821be4694a9788927bc6479054b4df50078448b1cbc85db55",
+      "initramfs_sha256": "25f07c6e72c83d168693a669e1a8f74515fdb9b44555a6925476f8c57aa19f9e",
+      "host_kernel": "7.0.0-31-generic",
+      "runs": 20,
+      "full_backing_sha256": "39b42e6c511ea6d8a6934b7646863453521c4d4e48d0cf5cfb7eed0eb7842241"
+    },
+    {
+      "campaign": "interim",
+      "commit": "9eff14d22",
+      "binary_sha256": "41c1631922ff7dd098b7c6b516e349609f0d1de202e88d65d544e523e894125c",
+      "guest_kernel_sha256": "fd6951f02f4fd11821be4694a9788927bc6479054b4df50078448b1cbc85db55",
+      "initramfs_sha256": "25f07c6e72c83d168693a669e1a8f74515fdb9b44555a6925476f8c57aa19f9e",
+      "host_kernel": "7.0.0-31-generic",
+      "runs": 20,
+      "full_backing_sha256": "39b42e6c511ea6d8a6934b7646863453521c4d4e48d0cf5cfb7eed0eb7842241"
+    },
+    {
+      "campaign": "proposed",
+      "commit": "29c04bb6c63b765b52f39cd9be4a0461957c8500",
+      "binary_sha256": "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69",
+      "guest_kernel_sha256": "fd6951f02f4fd11821be4694a9788927bc6479054b4df50078448b1cbc85db55",
+      "initramfs_sha256": "25f07c6e72c83d168693a669e1a8f74515fdb9b44555a6925476f8c57aa19f9e",
+      "host_kernel": "7.0.0-31-generic",
+      "runs": 20,
+      "full_backing_sha256": "39b42e6c511ea6d8a6934b7646863453521c4d4e48d0cf5cfb7eed0eb7842241"
+    }
+  ],
+  "ceph_uncapped_guest_runs": 128,
+  "ceph_trials_per_workload": 2,
+  "ceph_windows": 2,
+  "rate_limiter_functional": true,
+  "physical_data_checks_by_binary": {
+    "d7f1e4e8318243a64f3eb0bb58d01126979554776a292016135d22886959de2f": 6,
+    "d3a5a44bf167682e1c1fee5a03ac2c49885c7177c2381217558230247c7e3ebf": 6,
+    "056dd409440b94c93955903a671df5cd1a3c41b5261e2e0f61c9b85f48a33e69": 6
+  },
+  "local_crc_checks_by_binary": {
+    "d3a5a44bf167682e1c1fee5a03ac2c49885c7177c2381217558230247c7e3ebf": 480,
+    "d7f1e4e8318243a64f3eb0bb58d01126979554776a292016135d22886959de2f": 480
+  },
+  "official_checkbuild": [
+    "x86_64",
+    "aarch64"
+  ],
+  "official_style": {
+    "passed": 21,
+    "skipped": 4
+  },
+  "targeted_test_counts_per_filter": {
+    "main": [
+      90,
+      7,
+      21,
+      37,
+      0,
+      1,
+      1,
+      9
+    ],
+    "reference": [
+      160,
+      9,
+      14,
+      23,
+      1,
+      1,
+      1,
+      9
+    ],
+    "b22_fixed": [
+      160,
+      6,
+      13,
+      27,
+      22,
+      1,
+      1,
+      1,
+      9
+    ],
+    "portable_b22_fixed": [
+      160,
+      9,
+      13,
+      23,
+      1,
+      1,
+      1,
+      9
+    ]
+  },
+  "partial_sector_kvm": 4,
+  "snapshot_replace_kvm": 4,
+  "b22_fixed_snapshot_and_precopy_kvm": 4,
+  "power_cut_test": false,
+  "enterprise_plp_measurements": false
+}

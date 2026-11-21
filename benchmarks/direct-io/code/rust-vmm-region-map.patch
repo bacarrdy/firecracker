@@ -1,0 +1,134 @@
+From 72e96bd0f8a4abfaed0a25aa262f67453c8da1f6 Mon Sep 17 00:00:00 2001
+From: Jonas Savulionis <jonas@esnet.lt>
+Date: Sat, 21 Nov 2026 12:05:47 +0200
+Subject: [PATCH] vm-memory: share the region table when cloning a memory map
+
+A region collection is immutable. Keep its region pointers in an Arc slice so that retaining a map for an in-flight I/O increments one reference. Replace the table on insert and removal. Test that a clone still addresses the original mapping after replacing a region at the same guest address.
+
+Signed-off-by: Jonas Savulionis <jonas@esnet.lt>
+---
+ vm-memory/benches/guest_memory.rs |  8 ++++++++
+ vm-memory/src/mmap/mod.rs         | 21 +++++++++++++++++++++
+ vm-memory/src/region.rs           | 21 ++++++++++++++-------
+ 3 files changed, 43 insertions(+), 7 deletions(-)
+
+diff --git a/vm-memory/benches/guest_memory.rs b/vm-memory/benches/guest_memory.rs
+index e2e7d50..9b2d5cf 100644
+--- a/vm-memory/benches/guest_memory.rs
++++ b/vm-memory/benches/guest_memory.rs
+@@ -14,6 +14,14 @@ const REGIONS_COUNT: u64 = 256;
+ 
+ pub fn benchmark_for_guest_memory(c: &mut Criterion) {
+     benchmark_find_region(c);
++    let mut group = c.benchmark_group("clone_region_collection");
++    for count in [1, 2, 32, 256] {
++        let memory = super::create_guest_memory_mmap(4096, count);
++        group.bench_function(count.to_string(), |b| {
++            b.iter(|| black_box(black_box(&memory).clone()))
++        });
++    }
++    group.finish();
+ }
+ 
+ fn find_region<B>(mem: &GuestMemoryMmap<B>)
+diff --git a/vm-memory/src/mmap/mod.rs b/vm-memory/src/mmap/mod.rs
+index d125a41..80c1502 100644
+--- a/vm-memory/src/mmap/mod.rs
++++ b/vm-memory/src/mmap/mod.rs
+@@ -758,6 +758,27 @@ mod tests {
+         });
+     }
+ 
++    #[test]
++    fn clone_keeps_original_mapping_after_region_replacement() {
++        let addr = GuestAddress(0x3000);
++        let original = GuestMemoryMmap::from_ranges(&[(addr, 0x1000)]).unwrap();
++        original.write_obj(0x35u8, addr).unwrap();
++        let pending = original.clone();
++        let (empty, removed) = original.remove_region(addr, 0x1000).unwrap();
++        let old_region = Arc::downgrade(&removed);
++        drop(original);
++        drop(removed);
++
++        let fresh = Arc::new(GuestRegionMmap::from_range(addr, 0x1000, None).unwrap());
++        let replacement = empty.insert_region(fresh).unwrap();
++        replacement.write_obj(0x67u8, addr).unwrap();
++        assert_eq!(pending.read_obj::<u8>(addr).unwrap(), 0x35);
++        assert_eq!(replacement.read_obj::<u8>(addr).unwrap(), 0x67);
++        assert!(empty.find_region(addr).is_none());
++        drop(pending);
++        assert!(old_region.upgrade().is_none());
++    }
++
+     #[test]
+     fn test_change_region_addr() {
+         let addr1 = GuestAddress(0x1000);
+diff --git a/vm-memory/src/region.rs b/vm-memory/src/region.rs
+index 849c547..86fd0ad 100644
+--- a/vm-memory/src/region.rs
++++ b/vm-memory/src/region.rs
+@@ -189,13 +189,13 @@ pub enum GuestRegionCollectionError {
+ /// Represents a sorted set of non-overlapping physical guest memory regions.
+ #[derive(Debug)]
+ pub struct GuestRegionCollection<R> {
+-    regions: Vec<Arc<R>>,
++    regions: Arc<[Arc<R>]>,
+ }
+ 
+ impl<R> Default for GuestRegionCollection<R> {
+     fn default() -> Self {
+         Self {
+-            regions: Vec::new(),
++            regions: Arc::default(),
+         }
+     }
+ }
+@@ -203,7 +203,7 @@ impl<R> Default for GuestRegionCollection<R> {
+ impl<R> Clone for GuestRegionCollection<R> {
+     fn clone(&self) -> Self {
+         GuestRegionCollection {
+-            regions: self.regions.iter().map(Arc::clone).collect(),
++            regions: Arc::clone(&self.regions),
+         }
+     }
+ }
+@@ -259,7 +259,9 @@ impl<R: GuestMemoryRegion> GuestRegionCollection<R> {
+             }
+         }
+ 
+-        Ok(Self { regions })
++        Ok(Self {
++            regions: regions.into(),
++        })
+     }
+ 
+     /// Insert a region into the `GuestMemoryMmap` object and return a new `GuestMemoryMmap`.
+@@ -270,7 +272,7 @@ impl<R: GuestMemoryRegion> GuestRegionCollection<R> {
+         &self,
+         region: Arc<R>,
+     ) -> std::result::Result<GuestRegionCollection<R>, GuestRegionCollectionError> {
+-        let mut regions = self.regions.clone();
++        let mut regions = self.regions.to_vec();
+         regions.push(region);
+         regions.sort_by_key(|x| x.start_addr());
+ 
+@@ -290,9 +292,14 @@ impl<R: GuestMemoryRegion> GuestRegionCollection<R> {
+     ) -> std::result::Result<(GuestRegionCollection<R>, Arc<R>), GuestRegionCollectionError> {
+         if let Ok(region_index) = self.regions.binary_search_by_key(&base, |x| x.start_addr()) {
+             if self.regions.get(region_index).unwrap().len() == size {
+-                let mut regions = self.regions.clone();
++                let mut regions = self.regions.to_vec();
+                 let region = regions.remove(region_index);
+-                return Ok((Self { regions }, region));
++                return Ok((
++                    Self {
++                        regions: regions.into(),
++                    },
++                    region,
++                ));
+             }
+         }
+ 
+-- 
+2.43.0
+
