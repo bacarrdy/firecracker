@@ -6,9 +6,9 @@ Add an optional `direct_io` setting for raw virtio-blk drives. Both reads and wr
 
 In #5910 we kept reads buffered and opened the disk again for direct writes. You declined the second open and said you would consider direct reads and writes. This implements that option for Sync and Async. [Earlier discussion](https://github.com/firecracker-microvm/firecracker/pull/5910#issuecomment-4629799026)
 
-The main use case is keeping guest disk data out of the host page cache. On our local thin volume the single-open builds were much faster than stock for large writes including the final fsync. Stock was faster reading the same addresses again. Across workloads we did not consistently beat our revised two-open implementation on both throughput and tail latency.
+The option keeps guest disk data out of the host page cache. On our consumer NVMe the proposed PR build wrote 4 GiB in 1 MiB requests at 1,602 MiB/s before the final guest fsync and 1,597 MiB/s including it. Stock reached 1,559 and 321 MiB/s in an earlier session on the same device. First 4 KiB random reads were slower with the PR build at 72,458 IOPS versus 77,696 on stock. Both reached the backing volume.
 
-Across 12 local workloads the proposed upstream executable was ahead of stock on both throughput and p99 in 2, behind in 4, with a trade-off in 6. Our latest integrated SG32 build beat both stock and the revised two-open implementation on those criteria in 1 of 12. Mixed profiles count both reads and writes. The local baselines were recorded in an earlier session.
+Our revised two-open build reached 2,077 MiB/s for the same 1 MiB write including fsync, with 10.9 ms write p99. The proposed build had 15.8 ms write p99. We have kept the two-open results and the downstream 32-segment results in the tables below.
 
 The proposed main commit is `29c04bb6c`. We measured that exact executable with the option off and on. Our later two-open SG32 build already used direct I/O for reads and writes. Its other file description handled metadata, flush and discard. Our one-open SG32 builds preserve its scalar, vectored and alignment-repair paths, and use the same open for flush and discard. They include scatter/gather and guest-memory changes beyond this PR.
 
@@ -19,44 +19,51 @@ Five runs per configuration on a workstation, with 128 MiB per sequential phase.
 | Guest workload | Unit | Async buffered | Async direct | Sync buffered | Sync direct |
 | --- | --- | --- | --- | --- | --- |
 | 1 MiB sequential read, first | MiB/s | 1,770.2 | **2,356.2** | **1,667.0** | 1,550.2 |
-| 1 MiB sequential read, repeat | MiB/s | **4,165.4** | 2,471.1 | **4,305.3** | 1,415.8 |
 | 1 MiB sequential write, final fsync | MiB/s | 326.0 | **350.4** | 308.9 | **347.7** |
 | 4 KiB mixed 50/50, final fsync | IOPS | **33,141** | 28,825 | **16,090** | 12,190 |
 | 1 MiB first read, batch p99 | µs | 9,973 | **8,497** | **14,468** | 25,723 |
-| 1 MiB repeat read, batch p99 | µs | **5,999** | 9,092 | **6,277** | 27,186 |
 | 1 MiB write, batch p99 | µs | **6,628** | 51,087 | **10,475** | 49,499 |
 | 4 KiB mixed read, batch p99 | µs | **809** | 2,528 | **2,144** | 3,978 |
 | 4 KiB mixed write, batch p99 | µs | 642 | **542** | **2,144** | 3,978 |
 
+<details>
+<summary>Workstation repeated-read cache check</summary>
+
+| Guest workload | Unit | Async buffered | Async direct | Sync buffered | Sync direct |
+| --- | --- | --- | --- | --- | --- |
+| 1 MiB sequential read, repeat | MiB/s | **4,165.4** | 2,471.1 | **4,305.3** | 1,415.8 |
+| 1 MiB repeat read, batch p99 | µs | **5,999** | 9,092 | **6,277** | 27,186 |
+
+</details>
+
 ## Ceph RBD
 
-Guest fio on an additional raw RBD disk mapped with rbd-nbd. The first two columns use the same upstream PR executable. The last two use the downstream 32-segment builds. All four use Async and Writeback. The guest used direct I/O in all four. Two seeds, reversed build order on the second pass. Each cell gives **MiB/s / IOPS / p99 in ms** during fio. MiB/s and IOPS are per direction. Lower p99 is better.
+Guest fio on an additional raw RBD disk mapped with rbd-nbd. The first two columns use the same PR executable. The last two use the downstream 32-segment builds. All four use Async and Writeback, with direct I/O in the guest. We ran two seeds and reversed build order on the second pass. Each cell gives **MiB/s / IOPS / guest I/O p99 in ms**. Reads use active fio time. Writes and both directions of a mix include command overhead and the final fsync in their throughput clock. The p99 is for the individual data operation.
 
 | Workload | Direction | PR buffered | PR direct | SG32 RC1 | SG32 b22 + fixes |
 | --- | --- | --- | --- | --- | --- |
 | 4 KiB random read, QD32 | read | 155.5 / 39,816 / **1.499** | **159.6** / **40,866** / 1.532 | 154.2 / 39,476 / 1.622 | 157.4 / 40,284 / 1.573 |
-| 4 KiB random write, QD32 | write | **238.5** / **61,049** / **0.623** | 107.5 / 27,515 / 5.702 | 111.2 / 28,460 / 4.071 | 111.3 / 28,503 / 4.039 |
-| 4 KiB random mix 50/50, QD32 | read | **120.4** / **30,820** / **2.068** | 68.9 / 17,643 / 5.898 | 69.0 / 17,660 / 5.538 | 69.8 / 17,869 / 5.865 |
-| 4 KiB random mix 50/50, QD32 | write | **120.7** / **30,891** / **0.455** | 69.1 / 17,680 / 0.889 | 69.2 / 17,711 / 0.901 | 70.0 / 17,914 / 0.901 |
+| 4 KiB random write, QD32 | write | 60.8 / 15,574 / **0.623** | 75.9 / 19,442 / 5.702 | 76.6 / 19,615 / 4.071 | **82.9** / **21,210** / 4.039 |
+| 4 KiB random mix 50/50, QD32 | read | 40.6 / 10,399 / **2.068** | **50.1** / **12,832** / 5.898 | 47.6 / 12,185 / 5.538 | 49.9 / 12,767 / 5.865 |
+| 4 KiB random mix 50/50, QD32 | write | 40.7 / 10,422 / **0.455** | **50.2** / **12,861** / 0.889 | 47.7 / 12,220 / 0.901 | 50.0 / 12,798 / 0.901 |
 | 8 KiB random read, QD16 | read | 171.5 / 21,947 / 1.303 | 178.3 / 22,818 / 1.524 | **198.8** / **25,445** / **1.059** | 188.2 / 24,087 / 1.409 |
-| 8 KiB random write, QD16 | write | **319.8** / **40,937** / **0.540** | 167.1 / 21,385 / 2.933 | 196.0 / 25,091 / 2.036 | 197.8 / 25,324 / 1.827 |
-| 8 KiB random mix 70/30, QD16 | read | **139.6** / **17,869** / **1.393** | 127.7 / 16,348 / 2.556 | 129.1 / 16,518 / 2.294 | 128.8 / 16,488 / 3.224 |
-| 8 KiB random mix 70/30, QD16 | write | **60.2** / **7,709** / **0.307** | 55.1 / 7,050 / 0.426 | 55.7 / 7,125 / 0.438 | 55.6 / 7,116 / 0.365 |
+| 8 KiB random write, QD16 | write | 90.0 / 11,519 / **0.540** | 104.7 / 13,407 / 2.933 | **109.7** / **14,041** / 2.036 | **109.7** / 14,039 / 1.827 |
+| 8 KiB random mix 70/30, QD16 | read | 63.3 / 8,104 / **1.393** | **76.7** / **9,814** / 2.556 | 76.0 / 9,727 / 2.294 | 76.6 / 9,809 / 3.224 |
+| 8 KiB random mix 70/30, QD16 | write | 27.3 / 3,496 / **0.307** | **33.1** / **4,233** / 0.426 | 32.8 / 4,196 / 0.438 | **33.1** / 4,231 / 0.365 |
 | 64 KiB sequential read, QD32 | read | **401.9** / **6,430** / **10.945** | 231.2 / 3,699 / 24.773 | 283.2 / 4,531 / 14.123 | 252.3 / 4,037 / 17.695 |
-| 64 KiB sequential write, QD32 | write | **522.9** / **8,367** / **4.874** | 320.7 / 5,131 / 40.042 | 491.7 / 7,866 / 15.827 | 513.1 / 8,210 / 9.699 |
-| 64 KiB random mix 50/50, QD32 | read | **543.4** / **8,695** / **5.562** | 137.1 / 2,193 / 14.025 | 376.3 / 6,021 / 9.699 | 340.0 / 5,441 / 8.159 |
-| 64 KiB random mix 50/50, QD32 | write | **544.0** / **8,703** / **6.517** | 137.3 / 2,196 / 21.103 | 376.8 / 6,028 / 7.979 | 340.5 / 5,449 / 7.766 |
+| 64 KiB sequential write, QD32 | write | 207.0 / 3,312 / **4.874** | 244.6 / 3,914 / 40.042 | 357.6 / 5,721 / 15.827 | **361.4** / **5,782** / 9.699 |
+| 64 KiB random mix 50/50, QD32 | read | 194.6 / 3,114 / **5.562** | 112.0 / 1,792 / 14.025 | **247.9** / **3,967** / 9.699 | 217.7 / 3,483 / 8.159 |
+| 64 KiB random mix 50/50, QD32 | write | 194.9 / 3,118 / **6.517** | 112.2 / 1,795 / 21.103 | **248.3** / **3,972** / 7.979 | 218.0 / 3,488 / 7.766 |
 | 512 KiB sequential read, QD16 | read | 516.3 / 1,033 / 33.489 | 250.7 / 501 / 86.180 | 302.3 / 605 / 47.186 | **1,356.6** / **2,713** / **14.025** |
-| 512 KiB repeat read, QD16 | read | **1,945.0** / **3,890** / **9.110** | 857.3 / 1,715 / 48.595 | 827.9 / 1,656 / 23.101 | 937.7 / 1,875 / 22.708 |
-| 512 KiB sequential write, QD16 | write | **1,505.3** / **3,011** / **7.291** | 278.6 / 557 / 138.674 | 523.4 / 1,047 / 52.691 | 574.1 / 1,148 / 45.285 |
-| 512 KiB random mix 50/50, QD32 | read | **1,035.0** / **2,070** / **15.827** | 387.5 / 775 / 156.500 | 422.2 / 844 / 117.441 | 285.7 / 571 / 407.372 |
-| 512 KiB random mix 50/50, QD32 | write | **1,051.6** / **2,103** / **12.255** | 393.9 / 788 / 151.257 | 429.0 / 858 / 112.198 | 290.5 / 581 / 277.348 |
+| 512 KiB sequential write, QD16 | write | 298.2 / 596 / **7.291** | 230.5 / 461 / 138.674 | 380.0 / 760 / 52.691 | **400.1** / **800** / 45.285 |
+| 512 KiB random mix 50/50, QD32 | read | 239.6 / 479 / **15.827** | 224.3 / 449 / 156.500 | **247.6** / **495** / 117.441 | 185.1 / 370 / 407.372 |
+| 512 KiB random mix 50/50, QD32 | write | 243.4 / 487 / **12.255** | 228.0 / 456 / 151.257 | **251.6** / **503** / 112.198 | 188.2 / 376 / 277.348 |
 | 1 MiB sequential read, QD16 | read | 651.0 / 651 / 47.907 | 652.3 / 652 / 85.393 | 1,666.4 / 1,666 / 22.249 | **1,769.8** / **1,770** / **16.613** |
-| 1 MiB sequential write, QD16 | write | **983.1** / **983** / **17.957** | 386.4 / 386 / 125.043 | 683.4 / 683 / 71.959 | 652.2 / 652 / 124.518 |
-| 1 MiB random mix 50/50, QD32 | read | **719.2** / **719** / **37.290** | 550.7 / 551 / 109.314 | 471.8 / 472 / 94.896 | 569.6 / 570 / 83.362 |
-| 1 MiB random mix 50/50, QD32 | write | **718.1** / **718** / **39.846** | 538.5 / 538 / 104.727 | 469.9 / 470 / 98.042 | 558.4 / 558 / 81.789 |
+| 1 MiB sequential write, QD16 | write | 270.2 / 270 / **17.957** | 287.2 / 287 / 125.043 | 438.9 / **439** / 71.959 | **439.1** / **439** / 124.518 |
+| 1 MiB random mix 50/50, QD32 | read | 219.4 / 219 / **37.290** | 298.9 / **299** / 109.314 | 270.7 / 271 / 94.896 | **299.2** / **299** / 83.362 |
+| 1 MiB random mix 50/50, QD32 | write | 216.8 / 217 / **39.846** | 293.5 / **294** / 104.727 | 268.8 / 269 / 98.042 | **293.8** / **294** / 81.789 |
 
-For the exact PR executable, buffered / direct gave 39,816 / 40,866 IOPS for a first 4 KiB read and 1.499 / 1.532 ms p99. A 1 MiB write gave 270.2 / 287.2 MiB/s through the final fsync. Across 16 phases, direct was ahead of buffered on both throughput and p99 in 0, behind in 6, with a trade-off in 10. Mixed phases count both directions and write rates include the final fsync.
+On the PR executable, buffered / direct reached 39,816 / 40,866 IOPS on the first 4 KiB read. The 1 MiB write reached 270.2 / 287.2 MiB/s through fsync, with write p99 of 18.0 / 125.0 ms. In the 512 KiB mix the write direction reached 243.4 / 228.0 MiB/s with 12.3 / 151.3 ms p99.
 
 On the downstream b22 + fixes build the two 1 MiB write p99s were 74 and 175 ms, with a final fsync under 1 ms. The upstream buffered runs had 18 ms write p99 and final fsyncs of 1,024 and 937 ms. All four wrote 512 MiB to the NBD device. In the 512 KiB mix, both SG32 direct builds issued almost identical backing reads and writes. At the same two seeds, write p99 was 126 and 98 ms on RC1 and 354 and 200 ms on b22 + fixes. The guest recorded completion latency. We did not trace individual requests through the host and the cluster.
 
@@ -82,6 +89,47 @@ Each cell gives **MiB/s (IOPS) before fsync / MiB/s (IOPS) including fsync / fin
 | 1 MiB sequential write, QD16 | write | **559.5** (**559**) / 270.2 (270) / 980.39 | 287.3 (287) / 287.2 (287) / 0.56 | 439.1 (439) / 438.9 (**439**) / 0.60 | 439.3 (439) / **439.1** (**439**) / **0.54** |
 | 1 MiB random mix 50/50, QD32 | read | **333.7** (**334**) / 219.4 (219) / 391.21 | 299.1 (299) / 298.9 (**299**) / **0.48** | 270.8 (271) / 270.7 (271) / 0.55 | 299.4 (299) / **299.2** (**299**) / 0.50 |
 | 1 MiB random mix 50/50, QD32 | write | **331.0** (**331**) / 216.8 (217) / 391.21 | 293.7 (294) / 293.5 (**294**) / **0.48** | 268.9 (269) / 268.8 (269) / 0.55 | 293.9 (294) / **293.8** (**294**) / 0.50 |
+
+</details>
+
+<details>
+<summary>Ceph rates during active fio, before the final fsync</summary>
+
+MiB/s / IOPS / p99 in ms on the fio clock.
+
+| Workload | Direction | PR buffered | PR direct | SG32 RC1 | SG32 b22 + fixes |
+| --- | --- | --- | --- | --- | --- |
+| 4 KiB random read, QD32 | read | 155.5 / 39,816 / **1.499** | **159.6** / **40,866** / 1.532 | 154.2 / 39,476 / 1.622 | 157.4 / 40,284 / 1.573 |
+| 4 KiB random write, QD32 | write | **238.5** / **61,049** / **0.623** | 107.5 / 27,515 / 5.702 | 111.2 / 28,460 / 4.071 | 111.3 / 28,503 / 4.039 |
+| 4 KiB random mix 50/50, QD32 | read | **120.4** / **30,820** / **2.068** | 68.9 / 17,643 / 5.898 | 69.0 / 17,660 / 5.538 | 69.8 / 17,869 / 5.865 |
+| 4 KiB random mix 50/50, QD32 | write | **120.7** / **30,891** / **0.455** | 69.1 / 17,680 / 0.889 | 69.2 / 17,711 / 0.901 | 70.0 / 17,914 / 0.901 |
+| 8 KiB random read, QD16 | read | 171.5 / 21,947 / 1.303 | 178.3 / 22,818 / 1.524 | **198.8** / **25,445** / **1.059** | 188.2 / 24,087 / 1.409 |
+| 8 KiB random write, QD16 | write | **319.8** / **40,937** / **0.540** | 167.1 / 21,385 / 2.933 | 196.0 / 25,091 / 2.036 | 197.8 / 25,324 / 1.827 |
+| 8 KiB random mix 70/30, QD16 | read | **139.6** / **17,869** / **1.393** | 127.7 / 16,348 / 2.556 | 129.1 / 16,518 / 2.294 | 128.8 / 16,488 / 3.224 |
+| 8 KiB random mix 70/30, QD16 | write | **60.2** / **7,709** / **0.307** | 55.1 / 7,050 / 0.426 | 55.7 / 7,125 / 0.438 | 55.6 / 7,116 / 0.365 |
+| 64 KiB sequential read, QD32 | read | **401.9** / **6,430** / **10.945** | 231.2 / 3,699 / 24.773 | 283.2 / 4,531 / 14.123 | 252.3 / 4,037 / 17.695 |
+| 64 KiB sequential write, QD32 | write | **522.9** / **8,367** / **4.874** | 320.7 / 5,131 / 40.042 | 491.7 / 7,866 / 15.827 | 513.1 / 8,210 / 9.699 |
+| 64 KiB random mix 50/50, QD32 | read | **543.4** / **8,695** / **5.562** | 137.1 / 2,193 / 14.025 | 376.3 / 6,021 / 9.699 | 340.0 / 5,441 / 8.159 |
+| 64 KiB random mix 50/50, QD32 | write | **544.0** / **8,703** / **6.517** | 137.3 / 2,196 / 21.103 | 376.8 / 6,028 / 7.979 | 340.5 / 5,449 / 7.766 |
+| 512 KiB sequential read, QD16 | read | 516.3 / 1,033 / 33.489 | 250.7 / 501 / 86.180 | 302.3 / 605 / 47.186 | **1,356.6** / **2,713** / **14.025** |
+| 512 KiB sequential write, QD16 | write | **1,505.3** / **3,011** / **7.291** | 278.6 / 557 / 138.674 | 523.4 / 1,047 / 52.691 | 574.1 / 1,148 / 45.285 |
+| 512 KiB random mix 50/50, QD32 | read | **1,035.0** / **2,070** / **15.827** | 387.5 / 775 / 156.500 | 422.2 / 844 / 117.441 | 285.7 / 571 / 407.372 |
+| 512 KiB random mix 50/50, QD32 | write | **1,051.6** / **2,103** / **12.255** | 393.9 / 788 / 151.257 | 429.0 / 858 / 112.198 | 290.5 / 581 / 277.348 |
+| 1 MiB sequential read, QD16 | read | 651.0 / 651 / 47.907 | 652.3 / 652 / 85.393 | 1,666.4 / 1,666 / 22.249 | **1,769.8** / **1,770** / **16.613** |
+| 1 MiB sequential write, QD16 | write | **983.1** / **983** / **17.957** | 386.4 / 386 / 125.043 | 683.4 / 683 / 71.959 | 652.2 / 652 / 124.518 |
+| 1 MiB random mix 50/50, QD32 | read | **719.2** / **719** / **37.290** | 550.7 / 551 / 109.314 | 471.8 / 472 / 94.896 | 569.6 / 570 / 83.362 |
+| 1 MiB random mix 50/50, QD32 | write | **718.1** / **718** / **39.846** | 538.5 / 538 / 104.727 | 469.9 / 470 / 98.042 | 558.4 / 558 / 81.789 |
+
+</details>
+
+<details>
+<summary>Ceph repeated-read cache check</summary>
+
+The guest read the same range again with the host cache retained. The cluster had its own caches throughout. MiB/s / IOPS / p99 in ms.
+
+| Workload | Direction | PR buffered | PR direct | SG32 RC1 | SG32 b22 + fixes |
+| --- | --- | --- | --- | --- | --- |
+| 512 KiB repeat read, QD16 | read | **1,945.0** / **3,890** / **9.110** | 857.3 / 1,715 / 48.595 | 827.9 / 1,656 / 23.101 | 937.7 / 1,875 / 22.708 |
 
 </details>
 
@@ -124,12 +172,11 @@ The host used a consumer Kingston KC3000 2 TB (EIFK51.2) with Linux 7.0.0-43-gen
 
 Each build completed 12 workload phases at four seeds. Stock, both two-open builds and b22 were rotated in the original run. RC1 ran in a later window. In the last window we alternated b22 + fixes with the exact PR binary on a third thin volume. Each ran first twice per workload. All three windows used the same host, guest workloads and seeds. We recorded other disk traffic and temperature and allowed the SSD to rest between runs. Cross-session differences include storage and VM placement effects.
 
-**MiB/s.** Reads use active I/O time. Writes and mixes include the final guest fsync and the command overhead. Read and write rates in a mix use the same elapsed time.
+**MiB/s.** First reads use active I/O time. Writes and both directions of a mix include the final guest fsync and command overhead. The repeated-read cache checks are listed separately.
 
 | Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 4 KiB random read, QD32 (first) | read | **303.5** | 308.8 | 261.3 | 253.8 | 267.1 | 265.0 | 283.0 |
-| 4 KiB random read, QD32 (repeat) | read | **323.4** | 294.1 | 273.5 | 246.6 | 268.2 | 247.1 | 227.0 |
 | 4 KiB random write, QD32 | write | 127.5 | 262.3 | 221.4 | 230.2 | 209.6 | 218.3 | **233.3** |
 | 4 KiB random 50/50, QD32 | read | 89.9 | 144.9 | **124.1** | 116.7 | 120.3 | 116.6 | 113.8 |
 | 4 KiB random 50/50, QD32 | write | 90.2 | 145.4 | **124.6** | 116.7 | 120.4 | 116.7 | 114.2 |
@@ -140,43 +187,17 @@ Each build completed 12 workload phases at four seeds. Stock, both two-open buil
 | 512 KiB random 50/50, QD32 | read | 270.6 | 906.5 | 841.0 | 931.2 | 726.5 | **964.9** | 882.4 |
 | 512 KiB random 50/50, QD32 | write | 276.1 | 932.3 | 857.7 | 948.3 | 744.8 | **974.0** | 897.8 |
 | 512 KiB sequential read, QD16 (first) | read | 2,738.0 | 2,742.6 | 4,113.0 | 4,501.4 | 3,895.6 | **4,565.1** | 4,323.0 |
-| 512 KiB sequential read, QD16 (repeat) | read | **5,055.5** | 3,314.3 | 3,871.5 | 3,331.6 | 3,908.5 | 3,943.1 | 4,195.2 |
 | 1 MiB sequential write, QD16 | write | 321.3 | 1,920.5 | **2,076.5** | 1,602.4 | 1,352.7 | 1,708.1 | 1,596.6 |
 | 4 KiB random write, QD1, final fsync | write | 43.1 | 46.8 | 45.1 | 46.2 | **46.6** | 46.1 | 45.7 |
 | 4 KiB random write, QD1, fsync each | write | 1.067 | 1.102 | **1.125** | 1.122 | 1.016 | 1.075 | 1.051 |
 
 † The first two-open, mixed build failed 65 of 480 integrity checks. Its results stay visible. Bold selects the best displayed value from the remaining builds. The revised two-open direct build, RC1 and b22 + fixes each passed their 480-case suites.
 
-<details>
-<summary>IOPS and p99 for every local workload</summary>
-
-**IOPS**
-
-| Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4 KiB random read, QD32 (first) | read | **77,695.6** | 79,057.2 | 66,888.6 | 64,964.6 | 68,389.9 | 67,849.1 | 72,458.3 |
-| 4 KiB random read, QD32 (repeat) | read | **82,780.6** | 75,290.3 | 70,028.5 | 63,118.7 | 68,662.8 | 63,258.7 | 58,118.4 |
-| 4 KiB random write, QD32 | write | 32,639.6 | 67,137.7 | 56,666.5 | 58,940.7 | 53,662.1 | 55,884.5 | **59,723.3** |
-| 4 KiB random 50/50, QD32 | read | 23,002.8 | 37,095.1 | **31,772.7** | 29,873.0 | 30,788.6 | 29,851.2 | 29,132.1 |
-| 4 KiB random 50/50, QD32 | write | 23,095.3 | 37,226.8 | **31,885.3** | 29,877.6 | 30,813.5 | 29,874.3 | 29,232.0 |
-| 8 KiB random 70/30, QD16 | read | 25,659.5 | 35,378.6 | 33,362.3 | **36,684.1** | 33,280.0 | 34,864.9 | 34,818.8 |
-| 8 KiB random 70/30, QD16 | write | 10,946.7 | 15,192.6 | 14,272.8 | **15,654.3** | 14,247.3 | 14,933.9 | 14,852.0 |
-| 64 KiB random 50/50, QD32 | read | 3,823.0 | 11,694.5 | **11,868.0** | 11,814.8 | 10,808.3 | 10,847.6 | 10,340.9 |
-| 64 KiB random 50/50, QD32 | write | 3,800.2 | 11,647.7 | **11,857.9** | 11,753.3 | 10,797.7 | 10,836.7 | 10,346.4 |
-| 512 KiB random 50/50, QD32 | read | 541.2 | 1,813.0 | 1,681.9 | 1,862.5 | 1,453.1 | **1,929.9** | 1,764.7 |
-| 512 KiB random 50/50, QD32 | write | 552.2 | 1,864.6 | 1,715.4 | 1,896.5 | 1,489.5 | **1,947.9** | 1,795.7 |
-| 512 KiB sequential read, QD16 (first) | read | 5,476.1 | 5,485.2 | 8,225.9 | 9,002.8 | 7,791.3 | **9,130.1** | 8,645.9 |
-| 512 KiB sequential read, QD16 (repeat) | read | **10,111.0** | 6,628.5 | 7,742.9 | 6,663.2 | 7,817.0 | 7,886.2 | 8,390.3 |
-| 1 MiB sequential write, QD16 | write | 321.3 | 1,920.5 | **2,076.5** | 1,602.4 | 1,352.7 | 1,708.1 | 1,596.6 |
-| 4 KiB random write, QD1, final fsync | write | 11,040.0 | 11,985.2 | 11,540.1 | 11,834.2 | **11,931.7** | 11,801.8 | 11,698.9 |
-| 4 KiB random write, QD1, fsync each | write | 273.2 | 282.1 | **288.0** | 287.3 | 260.0 | 275.2 | 269.0 |
-
-**Guest data I/O p99 in ms.** The QD1 fsync-each profile times each write together with its fsync. The fio percentiles measure individual data operations and exclude the final fsync.
+**Guest I/O p99 in ms.** The QD1 fsync-each profile times each write together with its fsync. The fio percentiles measure individual data operations before the final fsync.
 
 | Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 4 KiB random read, QD32 (first) | read | 0.672 | 0.577 | 0.705 | 0.700 | **0.664** | **0.664** | 0.705 |
-| 4 KiB random read, QD32 (repeat) | read | **0.498** | 0.508 | 0.680 | 0.721 | 0.647 | 0.664 | 0.807 |
 | 4 KiB random write, QD32 | write | 0.664 | 0.545 | 0.606 | **0.582** | 0.635 | 0.586 | 0.586 |
 | 4 KiB random 50/50, QD32 | read | **0.594** | 0.578 | 0.664 | 0.627 | 0.705 | 0.664 | 0.659 |
 | 4 KiB random 50/50, QD32 | write | **0.502** | 0.507 | 0.590 | 0.557 | 0.561 | 0.569 | 0.594 |
@@ -187,10 +208,29 @@ Each build completed 12 workload phases at four seeds. Stock, both two-open buil
 | 512 KiB random 50/50, QD32 | read | **5.177** | 8.569 | 8.028 | 6.586 | 12.452 | 8.126 | 8.339 |
 | 512 KiB random 50/50, QD32 | write | **3.670** | 8.667 | 8.143 | 6.029 | 13.304 | 6.554 | 10.764 |
 | 512 KiB sequential read, QD16 (first) | read | 3.949 | 3.899 | 2.753 | **2.277** | 2.654 | 2.654 | 2.392 |
-| 512 KiB sequential read, QD16 (repeat) | read | **1.860** | 3.568 | 2.507 | 3.244 | 2.703 | 2.802 | 2.540 |
 | 1 MiB sequential write, QD16 | write | 14.631 | 11.338 | **10.928** | 13.435 | 21.398 | 13.959 | 15.761 |
 | 4 KiB random write, QD1, final fsync | write | **0.097** | 0.112 | 0.111 | 0.117 | 0.113 | 0.110 | 0.113 |
 | 4 KiB random write, QD1, fsync each | write | 13.197 | 13.035 | **12.939** | 12.952 | 13.858 | 13.469 | 13.857 |
+
+<details>
+<summary>IOPS for every local disk workload</summary>
+
+| Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 KiB random read, QD32 (first) | read | **77,695.6** | 79,057.2 | 66,888.6 | 64,964.6 | 68,389.9 | 67,849.1 | 72,458.3 |
+| 4 KiB random write, QD32 | write | 32,639.6 | 67,137.7 | 56,666.5 | 58,940.7 | 53,662.1 | 55,884.5 | **59,723.3** |
+| 4 KiB random 50/50, QD32 | read | 23,002.8 | 37,095.1 | **31,772.7** | 29,873.0 | 30,788.6 | 29,851.2 | 29,132.1 |
+| 4 KiB random 50/50, QD32 | write | 23,095.3 | 37,226.8 | **31,885.3** | 29,877.6 | 30,813.5 | 29,874.3 | 29,232.0 |
+| 8 KiB random 70/30, QD16 | read | 25,659.5 | 35,378.6 | 33,362.3 | **36,684.1** | 33,280.0 | 34,864.9 | 34,818.8 |
+| 8 KiB random 70/30, QD16 | write | 10,946.7 | 15,192.6 | 14,272.8 | **15,654.3** | 14,247.3 | 14,933.9 | 14,852.0 |
+| 64 KiB random 50/50, QD32 | read | 3,823.0 | 11,694.5 | **11,868.0** | 11,814.8 | 10,808.3 | 10,847.6 | 10,340.9 |
+| 64 KiB random 50/50, QD32 | write | 3,800.2 | 11,647.7 | **11,857.9** | 11,753.3 | 10,797.7 | 10,836.7 | 10,346.4 |
+| 512 KiB random 50/50, QD32 | read | 541.2 | 1,813.0 | 1,681.9 | 1,862.5 | 1,453.1 | **1,929.9** | 1,764.7 |
+| 512 KiB random 50/50, QD32 | write | 552.2 | 1,864.6 | 1,715.4 | 1,896.5 | 1,489.5 | **1,947.9** | 1,795.7 |
+| 512 KiB sequential read, QD16 (first) | read | 5,476.1 | 5,485.2 | 8,225.9 | 9,002.8 | 7,791.3 | **9,130.1** | 8,645.9 |
+| 1 MiB sequential write, QD16 | write | 321.3 | 1,920.5 | **2,076.5** | 1,602.4 | 1,352.7 | 1,708.1 | 1,596.6 |
+| 4 KiB random write, QD1, final fsync | write | 11,040.0 | 11,985.2 | 11,540.1 | 11,834.2 | **11,931.7** | 11,801.8 | 11,698.9 |
+| 4 KiB random write, QD1, fsync each | write | 273.2 | 282.1 | **288.0** | 287.3 | 260.0 | 275.2 | 269.0 |
 
 </details>
 
@@ -245,37 +285,34 @@ Each build completed 12 workload phases at four seeds. Stock, both two-open buil
 </details>
 
 <details>
-<summary>Where throughput and latency agree</summary>
+<summary>Local repeated-read cache checks</summary>
 
-Each of the 12 phases counts once. A build is ahead if throughput is at least as high and p99 at least as low in every measured direction, with at least one strict improvement. Small differences count equally here. The table describes the observed medians and is sensitive to run-to-run variation.
+Reading the same addresses twice exercises the host cache. On the second pass stock read 0 MiB from the test volume at both sizes. The downstream b22 + fixes build read 256 MiB in the 4 KiB profile and 4,096 MiB in the 512 KiB profile.
 
-| Build | Comparator | Ahead on both | Behind on both | Trade-off | Tie |
-| --- | --- | --- | --- | --- | --- |
-| 1 open, b22 | Stock | 6 | 3 | 3 | 0 |
-| 1 open, RC1 | Stock | 2 | 3 | 7 | 0 |
-| 1 open, b22 + fixes | Stock | 4 | 2 | 6 | 0 |
-| 1 open, b22 | 2 opens, direct | 4 | 5 | 3 | 0 |
-| 1 open, RC1 | 2 opens, direct | 1 | 5 | 6 | 0 |
-| 1 open, b22 + fixes | 2 opens, direct | 3 | 3 | 6 | 0 |
-| 1 open, b22 | 1 open, RC1 | 7 | 4 | 1 | 0 |
-| 1 open, b22 + fixes | 1 open, b22 | 3 | 5 | 4 | 0 |
-| 1 open, b22 + fixes | 1 open, RC1 | 5 | 2 | 5 | 0 |
-| 1 open, b22 + fixes | PR direct (SG1) | 6 | 2 | 4 | 0 |
-| PR direct (SG1) | Stock | 2 | 4 | 6 | 0 |
-| PR direct (SG1) | 2 opens, direct | 3 | 4 | 5 | 0 |
+**MiB/s**
 
-This also compares each build with stock and the revised two-open build simultaneously. A phase is ahead of both only when it passes the same test against each baseline separately.
+| Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 KiB random read, QD32 (repeat) | read | **323.4** | 294.1 | 273.5 | 246.6 | 268.2 | 247.1 | 227.0 |
+| 512 KiB sequential read, QD16 (repeat) | read | **5,055.5** | 3,314.3 | 3,871.5 | 3,331.6 | 3,908.5 | 3,943.1 | 4,195.2 |
 
-| Build | Ahead of both baselines | Behind both baselines | Other outcomes |
-| --- | --- | --- | --- |
-| 1 open, b22 | 3 | 2 | 7 |
-| 1 open, RC1 | 0 | 1 | 11 |
-| 1 open, b22 + fixes | 1 | 0 | 11 |
-| PR direct (SG1) | 2 | 2 | 8 |
+**IOPS**
+
+| Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 KiB random read, QD32 (repeat) | read | **82,780.6** | 75,290.3 | 70,028.5 | 63,118.7 | 68,662.8 | 63,258.7 | 58,118.4 |
+| 512 KiB sequential read, QD16 (repeat) | read | **10,111.0** | 6,628.5 | 7,742.9 | 6,663.2 | 7,817.0 | 7,886.2 | 8,390.3 |
+
+**p99 in ms**
+
+| Workload | Direction | Stock | 2 opens, mixed† | 2 opens, direct | 1 open, b22 | 1 open, RC1 | 1 open, b22 + fixes | PR direct (SG1) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 KiB random read, QD32 (repeat) | read | **0.498** | 0.508 | 0.680 | 0.721 | 0.647 | 0.664 | 0.807 |
+| 512 KiB sequential read, QD16 (repeat) | read | **1.860** | 3.568 | 2.507 | 3.244 | 2.703 | 2.802 | 2.540 |
 
 </details>
 
-In 1 MiB writes including fsync, stock reached 321 MiB/s, the revised two-open build 2,077, b22 1,602, RC1 1,353, b22 + fixes 1,708 and the proposed upstream executable 1,597. In the repeat 512 KiB read, stock read zero bytes from the test volume while RC1 read all 4 GiB. The first random 4 KiB read reached the volume on both builds. The page cache alone does not explain that gap.
+On the integrated SG32 build, 512 KiB mixed reads and writes reached 965 and 974 MiB/s. The two-open SG32 build reached 841 and 858 MiB/s. Read p99 was 8.126 and 8.028 ms respectively, and write p99 was 6.554 and 8.143 ms. At 64 KiB the two-open build was faster in both directions and read p99 was 1.237 ms versus 2.437 ms on the integrated build.
 
 <details>
 <summary>Local tests with fragmented guest memory</summary>
