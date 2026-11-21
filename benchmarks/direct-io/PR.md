@@ -4,9 +4,11 @@ Add an optional `direct_io` setting for raw virtio-blk drives. Both reads and wr
 
 ## Reason
 
-In #5910 we kept reads buffered and opened the disk again for direct writes. You declined the second open and said you would consider direct reads and writes. This implements that option for Sync and Async. [Earlier discussion](https://github.com/firecracker-microvm/firecracker/pull/5910#issuecomment-4629799026)
+#5910 proposed a second open for direct writes and kept reads buffered. The team declined that version. During review, direct I/O in both directions was suggested as an alternative. Would you consider this single-open option for Sync and Async? [Earlier discussion](https://github.com/firecracker-microvm/firecracker/pull/5910#issuecomment-4629799026) · [Closing decision](https://github.com/firecracker-microvm/firecracker/pull/5910#issuecomment-6954909364)
 
-The option keeps guest disk data out of the host page cache. On our consumer NVMe the proposed PR build wrote 4 GiB in 1 MiB requests at 1,602 MiB/s before the final guest fsync and 1,597 MiB/s including it. Stock reached 1,559 and 321 MiB/s in an earlier session on the same device. First 4 KiB random reads were slower with the PR build at 72,458 IOPS versus 77,696 on stock. Both reached the backing volume.
+The option keeps guest disk data out of the host page cache. After a 128 MiB read from an ext4 backing file, the whole read range was resident with buffered I/O and none of it was resident with direct I/O. We saw the same result in five runs per setting for both engines.
+
+On our consumer NVMe the proposed PR build wrote 4 GiB in 1 MiB requests at 1,602 MiB/s before the final guest fsync and 1,597 MiB/s including it. Stock reached 1,559 and 321 MiB/s in an earlier session on the same device. First 4 KiB random reads were slower with the PR build at 72,458 IOPS versus 77,696 on stock. Both reached the backing volume.
 
 Our revised two-open build reached 2,077 MiB/s for the same 1 MiB write including fsync, with 10.9 ms write p99. The proposed build had 15.8 ms write p99. We have kept the two-open results and the downstream 32-segment results in the tables below.
 
