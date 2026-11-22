@@ -1,0 +1,45 @@
+{
+  "binary_sha256": "02be8acab6bda3cf6ea5f72daa432ad8f397dc6d2cdc3808ea94ea11b2e19f4e",
+  "guest_kernel_sha256": "fd6951f02f4fd11821be4694a9788927bc6479054b4df50078448b1cbc85db55",
+  "initramfs_sha256": "25f07c6e72c83d168693a669e1a8f74515fdb9b44555a6925476f8c57aa19f9e",
+  "binary_version": "Firecracker v1.19.0-dev",
+  "revision": "d542b92ce37ca4542e1b27407ea47dd803254db8",
+  "host_kernel": "7.0.0-31-generic",
+  "docker_image": "public.ecr.aws/firecracker/fcuvm:v94",
+  "docker_image_id": "sha256:3f0896265db6fb08f4f8705f58a04f8e112709bdf83111ea526a845cec67b5b7",
+  "backing_mount": "/dev/nvme0n1p1 ext4   rw,noatime",
+  "random_seed": 1120,
+  "orders": [
+    [
+      [
+        "Async",
+        "direct"
+      ],
+      [
+        "Async",
+        "buffered"
+      ]
+    ],
+    [
+      [
+        "Async",
+        "buffered"
+      ],
+      [
+        "Async",
+        "direct"
+      ]
+    ],
+    [
+      [
+        "Async",
+        "direct"
+      ],
+      [
+        "Async",
+        "buffered"
+      ]
+    ]
+  ],
+  "guest_kernel_release": "6.1.191"
+}

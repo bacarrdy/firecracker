@@ -1,0 +1,5 @@
+CHECK guest=6.1.190 max_segments=32 block_size=512
+RUN p1 0 seed=2605278799 PASS
+RUN p2 0 seed=316513245 PASS
+RUN wr 0 seed=927474702 PASS
+CHECK-COMPLETE
