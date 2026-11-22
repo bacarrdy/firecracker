@@ -1,0 +1,40 @@
+{
+  "binary_sha256": "60d229281f381bb460dee7ddcbf2140963e811e6cc5ec30733b56e7af9325149",
+  "revision": "97174a4368639848431d0c67d841d70714b6d736",
+  "host_kernel": "7.0.0-31-generic",
+  "image": "public.ecr.aws/firecracker/fcuvm:v94",
+  "guest_kernel": "6.1.191",
+  "backing_mount": "/dev/nvme0n1p1 ext4",
+  "backing_model": "KINGSTON SKC2500M8250G",
+  "cache_type": "Writeback",
+  "engine": "Async",
+  "guest_direct": true,
+  "rate_limiter": false,
+  "rounds": [
+    {
+      "seed": 61441,
+      "order": [
+        "buffered",
+        "direct"
+      ]
+    },
+    {
+      "seed": 61442,
+      "order": [
+        "direct",
+        "buffered"
+      ]
+    },
+    {
+      "seed": 61443,
+      "order": [
+        "buffered",
+        "direct"
+      ]
+    }
+  ],
+  "backing_bytes": 1073741824,
+  "main_phase_bytes": 268435456,
+  "host_fadvise_dontneed_before_each_phase": true,
+  "vcpu": 1
+}

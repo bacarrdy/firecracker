@@ -1,0 +1,30 @@
+[
+  {
+    "round": 2,
+    "host_io": "buffered",
+    "read_mib": 64,
+    "guest_buffers_plus_cached_before_kib": 8920,
+    "guest_buffers_plus_cached_after_kib": 75480
+  },
+  {
+    "round": 2,
+    "host_io": "direct",
+    "read_mib": 64,
+    "guest_buffers_plus_cached_before_kib": 8920,
+    "guest_buffers_plus_cached_after_kib": 75480
+  },
+  {
+    "round": 3,
+    "host_io": "buffered",
+    "read_mib": 64,
+    "guest_buffers_plus_cached_before_kib": 8920,
+    "guest_buffers_plus_cached_after_kib": 75480
+  },
+  {
+    "round": 3,
+    "host_io": "direct",
+    "read_mib": 64,
+    "guest_buffers_plus_cached_before_kib": 8920,
+    "guest_buffers_plus_cached_after_kib": 75480
+  }
+]
