@@ -2,6 +2,11 @@
 
 These are the original diffs from the I/O experiments. They target different revisions of the downstream block code. The 64-segment, larger-ring and indirect revisions had their own snapshot requirements. Both SG32 release candidates use 32 segments, 256 ring entries and direct descriptor chains. The proposed series is in the [source index](../README.md).
 
+The SG64 and SG64/512 experiments require a fresh boot. Format 12.1 stores the
+SEG_MAX feature bit, with the reader supplying the limit of 32. The experiment
+rejects snapshot creation, restore and migration. We verified the rejection on
+the measured SG64/512 binary both before boot and after pausing a running guest.
+
 | Patch | Experiment |
 | --- | --- |
 | [4k-alignment.patch](4k-alignment.patch) | Single-segment alignment checks. |
